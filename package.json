@@ -1,0 +1,24 @@
+{
+  "name": "aladdin-node-server",
+  "version": "1.0.0",
+  "description": "Aladdin Intelligence backend - Node.js/Express/MongoDB",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "sync": "node workers/tokenSync.js"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-validator": "^7.3.1",
+    "lodash": "^4.17.21",
+    "mongoose": "^9.1.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
