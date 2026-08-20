@@ -18,3 +18,4 @@ export { WalletRecentBehaviourState } from './walletRecentBehaviourState.model.j
 export { CohortDefinition } from './cohortDefinition.model.js';
 export { CohortMembership } from './cohortMembership.model.js';
 export { ProviderRawSnapshot } from './providerRawSnapshot.model.js';
+export { User } from './user.model.js';
