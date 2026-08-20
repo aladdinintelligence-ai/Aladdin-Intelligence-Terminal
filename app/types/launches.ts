@@ -37,6 +37,7 @@ export interface LaunchToken {
 export type LaunchSortKey = "newest" | "market-cap" | "liquidity" | "volume" | "volume-change" | "bonding" | "migration-specialists";
 
 export interface LaunchFilters {
+  search: string;
   marketCapMin: number | null;
   marketCapMax: number | null;
   liquidityMin: number | null;

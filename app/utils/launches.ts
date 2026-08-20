@@ -1,6 +1,6 @@
 import type {LaunchFilters,LaunchLifecycle,LaunchSortKey,LaunchToken} from "@/app/types/launches";
 
-export const defaultLaunchFilters:LaunchFilters={marketCapMin:null,marketCapMax:null,liquidityMin:null,volumeMin:null,volumeChangeMin:null,ageMaxMinutes:null,lifecycle:[],bondingMin:null,migratedWithinMinutes:null,migrationSpecialistsMin:null,scalperShareMax:null,unknownShareMax:null,freshWalletsMin:null,sniperShareMax:null,bundlerShareMax:null,insider:"any",creatorSelling:"any"};
+export const defaultLaunchFilters:LaunchFilters={search:"",marketCapMin:null,marketCapMax:null,liquidityMin:null,volumeMin:null,volumeChangeMin:null,ageMaxMinutes:null,lifecycle:[],bondingMin:null,migratedWithinMinutes:null,migrationSpecialistsMin:null,scalperShareMax:null,unknownShareMax:null,freshWalletsMin:null,sniperShareMax:null,bundlerShareMax:null,insider:"any",creatorSelling:"any"};
 
 export const launchAcceptancePreset:LaunchFilters={...defaultLaunchFilters,marketCapMin:20000,marketCapMax:80000,volumeMin:20000,lifecycle:["new"],bondingMin:70,migrationSpecialistsMin:3,sniperShareMax:10};
 
@@ -18,6 +18,7 @@ export function participantTotal(token:LaunchToken){return Object.values(token.p
 export function participantShare(token:LaunchToken,key:"scalpers"|"unknown"){const total=participantTotal(token);return total?token.participants[key]/total*100:0}
 
 export function filterLaunchTokens(tokens:LaunchToken[],filters:LaunchFilters){return tokens.filter(token=>{
+  if(filters.search){const q=filters.search.toLowerCase();if(!token.symbol.toLowerCase().includes(q)&&!token.name.toLowerCase().includes(q))return false;}
   if(filters.lifecycle.length&&!filters.lifecycle.includes(token.lifecycle))return false;
   if(filters.marketCapMin!==null&&token.marketCap<filters.marketCapMin)return false;
   if(filters.marketCapMax!==null&&token.marketCap>filters.marketCapMax)return false;
@@ -58,6 +59,7 @@ export function lifecycleForTab(tab:string):LaunchLifecycle[]{
 
 export function activeFilterLabels(filters:LaunchFilters){
   const labels:{key:keyof LaunchFilters;label:string}[]=[];
+  if(filters.search)labels.push({key:"search",label:`Search: ${filters.search}`});
   if(filters.marketCapMin!==null||filters.marketCapMax!==null)labels.push({key:"marketCapMin",label:`MC ${filters.marketCapMin!==null?moneyCompact(filters.marketCapMin):"any"}–${filters.marketCapMax!==null?moneyCompact(filters.marketCapMax):"any"}`});
   if(filters.liquidityMin!==null)labels.push({key:"liquidityMin",label:`LIQ >${moneyCompact(filters.liquidityMin)}`});
   if(filters.volumeMin!==null)labels.push({key:"volumeMin",label:`1H Vol >${moneyCompact(filters.volumeMin)}`});
@@ -79,5 +81,6 @@ export function activeFilterLabels(filters:LaunchFilters){
 
 export function clearLaunchFilter(filters:LaunchFilters,key:keyof LaunchFilters):LaunchFilters{
   if(key==="marketCapMin")return {...filters,marketCapMin:null,marketCapMax:null};
+  if(key==="search")return {...filters,search:""};
   return {...filters,[key]:defaultLaunchFilters[key]};
 }
