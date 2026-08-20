@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const whitelist = [
-  "https://www.aladdin.pro",
+  "https://aladdin-intelligence.vercel.app",
   process.env.FRONTEND_LOCAL,
 ];
 
