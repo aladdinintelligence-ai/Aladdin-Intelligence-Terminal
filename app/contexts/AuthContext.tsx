@@ -14,6 +14,7 @@ export interface AuthContextValue {
   token: string | null;
   loading: boolean;
   setAuth: (token: string, user: AuthUser) => void;
+  updateUser: (user: AuthUser) => void;
   signOut: () => void;
 }
 
@@ -52,6 +53,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(newUser);
   }, []);
 
+  const updateUser = useCallback((updatedUser: AuthUser) => {
+    setUser(updatedUser);
+  }, []);
+
   const signOut = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     setAuthToken(null);
@@ -60,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, setAuth, signOut }}>
+    <AuthContext.Provider value={{ user, token, loading, setAuth, updateUser, signOut }}>
       {children}
     </AuthContext.Provider>
   );

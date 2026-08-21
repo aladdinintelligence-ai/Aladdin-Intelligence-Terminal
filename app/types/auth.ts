@@ -5,6 +5,8 @@ export interface AuthUser {
   email?: string;
   avatarUrl: string | null;
   primaryProfile: string;
+  authProvider: "google" | "telegram" | "phantom" | null;
+  walletAddress: string | null;
   hasWallet: boolean;
   createdAt?: string;
 }

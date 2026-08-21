@@ -38,7 +38,7 @@ export interface AladdinWalletState {
   providerName: string | null;
   balance: number | null;
   balanceStatus: "idle" | "loading" | "ready" | "unavailable";
-  network: "devnet";
+  network: "mainnet-beta";
   error: string | null;
   wallets: WalletOption[];
   modalOpen: boolean;

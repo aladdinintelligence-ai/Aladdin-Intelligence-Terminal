@@ -1,0 +1,26 @@
+/* Skeleton loading animation */
+.skeleton{
+  background:linear-gradient(90deg,var(--surface) 25%,var(--surface-raised) 50%,var(--surface) 75%);
+  background-size:200% 100%;
+  animation:skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius:8px;
+}
+@keyframes skeleton-shimmer{
+  0%{background-position:200% 0}
+  100%{background-position:-200% 0}
+}
+.skeleton-text{height:12px;border-radius:4px}
+.skeleton-text-sm{height:10px;border-radius:3px}
+.skeleton-text-lg{height:16px;border-radius:4px}
+.skeleton-circle{border-radius:50%}
+.skeleton-card{
+  display:grid;gap:10px;padding:16px;
+  border:1px solid var(--border);border-radius:14px;
+  background:var(--surface);
+}
+.skeleton-card-header{display:flex;align-items:center;gap:10px}
+.skeleton-card-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.skeleton-card-bars{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.skeleton-card-footer{display:flex;gap:8px}
+.skeleton-card-footer>div{flex:1;height:32px}
+@media(prefers-reduced-motion:reduce){.skeleton{animation:none}}

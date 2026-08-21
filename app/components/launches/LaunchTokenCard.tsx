@@ -9,8 +9,8 @@ export function LaunchTokenCard({token,onBuy}:{token:LaunchToken;onBuy:(token:La
   const change=volumeChange(token);
   return <article className={`launchTokenCard lifecycle-${token.lifecycle}`}>
     <header className="launchCardIdentity">
-      <Link href={`/live/${token.id}`} aria-label={`Open ${token.symbol} in Terminal`}><SyntheticTokenImage id={token.id} symbol={token.symbol} color={token.color} lifecycle={token.lifecycle} variant="card"/></Link>
-      <Link href={`/live/${token.id}`}><strong>${token.symbol}</strong><span>{token.name}</span></Link>
+      <Link href={`/live/${token.mint}`} aria-label={`Open ${token.symbol} in Terminal`}><SyntheticTokenImage id={token.id} symbol={token.symbol} color={token.color} lifecycle={token.lifecycle} variant="card"/></Link>
+      <Link href={`/live/${token.mint}`}><strong>${token.symbol}</strong><span>{token.name}</span></Link>
       <div>{token.lifecycle==="migrated"?<><b>MIGRATED</b><span>{ageLabel(token.migratedMinutesAgo??0)} ago</span></>:<span>{ageLabel(token.ageMinutes)}</span>}</div>
     </header>
     <div className="launchMarketGrid">

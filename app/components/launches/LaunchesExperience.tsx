@@ -7,9 +7,13 @@ import {LaunchActiveFilters} from "@/app/components/launches/LaunchActiveFilters
 import {LaunchFilters} from "@/app/components/launches/LaunchFilters";
 import {LaunchTokenCard} from "@/app/components/launches/LaunchTokenCard";
 import {LaunchFeedRow} from "@/app/components/launches/LaunchFeedRow";
-import {useAladdinWallet} from "@/app/hooks/useAladdinWallet";
+import {useAuth} from "@/app/hooks/useAuth";
 import {useLaunches} from "@/app/hooks/useLaunches";
-import {DevnetBuyModal} from "@/app/components/devnet-market/DevnetBuyModal";
+import {JupiterSwapModal} from "@/app/components/jupiter-swap/JupiterSwapModal";
+import {EntryModal} from "@/app/components/landing/EntryModal";
+import {Skeleton} from "@/app/components/ui/Skeleton";
+import "@/app/components/jupiter-swap/jupiter-swap.css";
+import "@/app/components/ui/skeleton.css";
 
 const STORAGE_KEY="aladdin-launches-view-v2";
 const tabs=["New","Almost Bonded","Migrated","Trending"] as const;
@@ -17,12 +21,13 @@ type Tab=(typeof tabs)[number];
 interface StoredLaunchView{tab:Tab;filters:LaunchFilterState;sort:LaunchSortKey;scrollY:number}
 
 export function LaunchesExperience(){
-  const wallet=useAladdinWallet();
+  const{user}=useAuth();
   const [tab,setTab]=useState<Tab>("New");
   const [filters,setFilters]=useState<LaunchFilterState>(defaultLaunchFilters);
   const [sort,setSort]=useState<LaunchSortKey>("newest");
   const [filtersOpen,setFiltersOpen]=useState(false);
   const [selectedBuy,setSelectedBuy]=useState<LaunchToken|null>(null);
+  const [showAuthGate,setShowAuthGate]=useState(false);
   const [hydrated,setHydrated]=useState(false);
 
   const {tokens:liveTokens,loading,refreshing,error}=useLaunches(tab);
@@ -39,7 +44,10 @@ export function LaunchesExperience(){
 
   const onBuy=(token:LaunchToken)=>{
     setSelectedBuy(token);
-    if(!wallet.connected)wallet.openWalletModal({reason:"$"+token.symbol+" Buy · resume this token after connection"})
+    if(!user){
+      setShowAuthGate(true);
+      return;
+    }
   };
 
   return <>
@@ -90,9 +98,37 @@ export function LaunchesExperience(){
     </div>
 
     {loading ? (
-      <div className="launchEmpty">
-        <b>Loading launches...</b>
-        <span>Fetching live data from Solana blockchain</span>
+      <div className="launchCardGrid">
+        {Array.from({length:6},(_,i)=>(
+          <div className="launchResponsiveItem" key={i}>
+            <div className="skeleton-card">
+              <div className="skeleton-card-header">
+                <div className="skeleton skeleton-circle" style={{width:36,height:36}}/>
+                <div style={{flex:1,display:"grid",gap:4}}>
+                  <Skeleton className="skeleton-text" count={1}/>
+                  <Skeleton className="skeleton-text-sm" count={1}/>
+                </div>
+                <Skeleton className="skeleton-text-sm" count={1}/>
+              </div>
+              <div className="skeleton-card-metrics">
+                <div style={{display:"grid",gap:4}}><Skeleton className="skeleton-text-sm" count={1}/><Skeleton className="skeleton-text" count={1}/></div>
+                <div style={{display:"grid",gap:4}}><Skeleton className="skeleton-text-sm" count={1}/><Skeleton className="skeleton-text" count={1}/></div>
+                <div style={{display:"grid",gap:4}}><Skeleton className="skeleton-text-sm" count={1}/><Skeleton className="skeleton-text" count={1}/></div>
+              </div>
+              <Skeleton className="skeleton-text-sm" count={1}/>
+              <div className="skeleton-card-bars">
+                <Skeleton className="skeleton-text-sm" count={1}/>
+                <Skeleton className="skeleton-text-sm" count={1}/>
+                <Skeleton className="skeleton-text-sm" count={1}/>
+                <Skeleton className="skeleton-text-sm" count={1}/>
+              </div>
+              <div className="skeleton-card-footer">
+                <div className="skeleton" style={{height:32,borderRadius:10}}/>
+                <div className="skeleton" style={{height:32,borderRadius:10}}/>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     ) : error && !liveTokens.length ? (
       <div className="launchEmpty">
@@ -111,7 +147,8 @@ export function LaunchesExperience(){
       </div>
     )}
 
-    <DevnetBuyModal token={selectedBuy} onClose={()=>setSelectedBuy(null)}/>
+    <JupiterSwapModal token={selectedBuy} onClose={()=>setSelectedBuy(null)} onAuthRequired={()=>setShowAuthGate(true)}/>
+    <EntryModal open={showAuthGate} onClose={()=>setShowAuthGate(false)} onAuth={()=>setShowAuthGate(false)}/>
     <LaunchFilters open={filtersOpen} filters={filters} onApply={setFilters} onClose={()=>setFiltersOpen(false)}/>
   </>;
 }

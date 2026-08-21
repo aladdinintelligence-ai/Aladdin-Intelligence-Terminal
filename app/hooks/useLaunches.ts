@@ -10,7 +10,7 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<LaunchToken[]>>();
-const CACHE_TTL = 30_000;
+const CACHE_TTL = 120_000;
 
 async function fetchTab(tab: string): Promise<LaunchToken[]> {
   const existing = inflight.get(tab);

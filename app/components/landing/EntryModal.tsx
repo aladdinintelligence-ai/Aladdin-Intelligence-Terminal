@@ -9,19 +9,19 @@ import {telegramLogin} from "@/app/lib/auth/telegram";
 
 const TELEGRAM_BOT_ID=process.env.NEXT_PUBLIC_TELEGRAM_BOT_ID||"";
 
-export function EntryModal({open,onClose}:{open:boolean;onClose:()=>void}){
+export function EntryModal({open,onClose,onAuth}:{open:boolean;onClose:()=>void;onAuth?:()=>void}){
   const router=useRouter(),wallet=useAladdinWallet(),auth=useAuth(),closeRef=useRef<HTMLButtonElement>(null);
   const [error,setError]=useState<string|null>(null),[loading,setLoading]=useState<"google"|"telegram"|null>(null);
 
   useEffect(()=>{if(!open)return;closeRef.current?.focus();const key=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose()};addEventListener("keydown",key);return()=>removeEventListener("keydown",key)},[onClose,open]);
 
   const handleGoogleAuth=useCallback(async(idToken:string)=>{
-    try{setLoading("google");setError(null);const response=await googleLogin(idToken);auth.setAuth(response.token,response.user);router.push("/launches")}catch(err){setError(err instanceof Error?err.message:"Google sign-in failed");setLoading(null)}
-  },[auth,router]);
+    try{setLoading("google");setError(null);const response=await googleLogin(idToken);auth.setAuth(response.token,response.user);if(onAuth){onAuth()}else{router.push("/launches")}}catch(err){setError(err instanceof Error?err.message:"Google sign-in failed");setLoading(null)}
+  },[auth,router,onAuth]);
 
   const handleTelegramAuth=useCallback(async(data:{id:number;first_name:string;last_name?:string;username?:string;photo_url?:string;auth_date:number;hash:string})=>{
-    try{setLoading("telegram");setError(null);const response=await telegramLogin(data);auth.setAuth(response.token,response.user);router.push("/launches")}catch(err){setError(err instanceof Error?err.message:"Telegram sign-in failed");setLoading(null)}
-  },[auth,router]);
+    try{setLoading("telegram");setError(null);const response=await telegramLogin(data);auth.setAuth(response.token,response.user);if(onAuth){onAuth()}else{router.push("/launches")}}catch(err){setError(err instanceof Error?err.message:"Telegram sign-in failed");setLoading(null)}
+  },[auth,router,onAuth]);
 
   const openTelegramAuth=useCallback(()=>{
     if(!TELEGRAM_BOT_ID){setError("Telegram is not configured");return}
