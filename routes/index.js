@@ -1,10 +1,16 @@
 import { Router } from 'express';
 import { tokensController, internalController, healthController, launchesController } from '../controllers/index.js';
 import { requireAuth } from '../middleware/auth.js';
+import swapRouter from './swap.js';
+import { getTokenInfoController } from '../controllers/token/tokenInfoController.js';
 
 const router = Router();
 
 router.get('/health', healthController.healthController);
+
+router.use(swapRouter);
+
+router.get('/api/token-info/:mint', getTokenInfoController);
 
 router.get('/api/launches', launchesController.getLaunchesController);
 

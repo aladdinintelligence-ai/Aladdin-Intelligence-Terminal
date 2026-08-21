@@ -12,6 +12,7 @@ authRouter.get('/api/auth/nonce', authController.getNonce);
 
 // Protected routes
 authRouter.get('/api/auth/me', requireAuth, authController.getMe);
+authRouter.patch('/api/auth/me', requireAuth, authController.updateMe);
 authRouter.post('/api/auth/wallet', requireAuth, authController.generateWallet);
 authRouter.get('/api/auth/wallet', requireAuth, authController.getWallet);
 

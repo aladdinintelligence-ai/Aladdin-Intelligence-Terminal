@@ -5,7 +5,8 @@ import {
   fetchTrendingTokens,
 } from '../../providers/bitquery.js';
 
-const CACHE_TTL = 25_000;
+const CACHE_TTL = 120_000;
+const STALE_TTL = 300_000;
 const responseCache = new Map();
 const inflightRequests = new Map();
 
@@ -90,6 +91,40 @@ function mapTrendingTokens(rawTokens) {
   }));
 }
 
+const fetchers = {
+  new: fetchNewTokens,
+  'almost-bonded': fetchAlmostBondedTokens,
+  migrated: fetchMigratedTokens,
+  trending: fetchTrendingTokens,
+};
+
+const mappers = {
+  new: mapNewTokens,
+  'almost-bonded': mapAlmostBondedTokens,
+  migrated: mapMigratedTokens,
+  trending: mapTrendingTokens,
+};
+
+async function fetchWithRetry(tab, limit, retries = 2) {
+  const fetcher = fetchers[tab];
+  if (!fetcher) throw new Error('Invalid tab');
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fetcher(limit);
+    } catch (err) {
+      const is429 = err?.message?.includes('429') || err?.status === 429;
+      if (is429 && attempt < retries) {
+        const delay = 2000 * (attempt + 1);
+        console.log(`[launches] 429 on ${tab}, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 export async function getLaunchesController(req, res, next) {
   try {
     const tab = req.query.tab || 'new';
@@ -97,63 +132,27 @@ export async function getLaunchesController(req, res, next) {
     const cacheKey = `${tab}:${limit}`;
 
     const cached = responseCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    const age = cached ? Date.now() - cached.timestamp : Infinity;
+
+    if (age < CACHE_TTL) {
       return res.json(cached.response);
+    }
+
+    if (age < STALE_TTL && cached) {
+      res.json(cached.response);
+
+      let inflight = inflightRequests.get(cacheKey);
+      if (!inflight) {
+        inflight = refreshCache(tab, limit, cacheKey);
+        inflightRequests.set(cacheKey, inflight);
+        inflight.finally(() => inflightRequests.delete(cacheKey));
+      }
+      return;
     }
 
     let inflight = inflightRequests.get(cacheKey);
     if (!inflight) {
-      inflight = (async () => {
-        let result;
-        switch (tab) {
-          case 'new':
-            result = await fetchNewTokens(limit);
-            break;
-          case 'almost-bonded':
-            result = await fetchAlmostBondedTokens(limit);
-            break;
-          case 'migrated':
-            result = await fetchMigratedTokens(limit);
-            break;
-          case 'trending':
-            result = await fetchTrendingTokens(limit);
-            break;
-          default:
-            throw new Error('Invalid tab');
-        }
-
-        if (result.error) throw new Error(result.error);
-
-        let tokens;
-        switch (tab) {
-          case 'new':
-            tokens = mapNewTokens(result.tokens);
-            break;
-          case 'almost-bonded':
-            tokens = mapAlmostBondedTokens(result.tokens);
-            break;
-          case 'migrated':
-            tokens = mapMigratedTokens(result.tokens);
-            break;
-          case 'trending':
-            tokens = mapTrendingTokens(result.tokens);
-            break;
-        }
-
-        const response = {
-          data: tokens,
-          meta: {
-            tab,
-            count: tokens.length,
-            source: 'bitquery',
-            fetchedAt: new Date().toISOString(),
-          },
-        };
-
-        responseCache.set(cacheKey, { response, timestamp: Date.now() });
-        return response;
-      })();
-
+      inflight = refreshCache(tab, limit, cacheKey);
       inflightRequests.set(cacheKey, inflight);
       inflight.finally(() => inflightRequests.delete(cacheKey));
     }
@@ -161,6 +160,40 @@ export async function getLaunchesController(req, res, next) {
     const response = await inflight;
     return res.json(response);
   } catch (exc) {
+    const cached = responseCache.get(`${req.query.tab || 'new'}:${req.query.limit || 50}`);
+    if (cached) {
+      console.log(`[launches] Serving stale cache for ${req.query.tab} after error`);
+      return res.json(cached.response);
+    }
     return next(exc);
+  }
+}
+
+async function refreshCache(tab, limit, cacheKey) {
+  try {
+    const result = await fetchWithRetry(tab, limit);
+
+    if (result.error) throw new Error(result.error);
+
+    const mapper = mappers[tab];
+    const tokens = mapper(result.tokens);
+
+    const response = {
+      data: tokens,
+      meta: {
+        tab,
+        count: tokens.length,
+        source: 'bitquery',
+        fetchedAt: new Date().toISOString(),
+      },
+    };
+
+    responseCache.set(cacheKey, { response, timestamp: Date.now() });
+    return response;
+  } catch (err) {
+    console.error(`[launches] Failed to fetch ${tab}:`, err.message);
+    const stale = responseCache.get(cacheKey);
+    if (stale) return stale.response;
+    throw err;
   }
 }

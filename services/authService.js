@@ -6,7 +6,10 @@ import { User } from '../models/user.model.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'aladdin-dev-secret-change-in-production';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '24h';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
+const WALLET_ENCRYPT_KEY = process.env.WALLET_ENCRYPT_KEY;
+if (!WALLET_ENCRYPT_KEY) {
+  console.error('[AUTH] FATAL: WALLET_ENCRYPT_KEY is not set in .env — wallet encryption will fail');
+}
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const AUTH_NONCE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
@@ -51,9 +54,10 @@ function deriveKey(password, salt) {
 }
 
 export function encryptAES(plaintext) {
+  if (!WALLET_ENCRYPT_KEY) throw new Error('WALLET_ENCRYPT_KEY is not configured');
   const salt = crypto.randomBytes(16).toString('hex');
   const iv = crypto.randomBytes(16);
-  const key = deriveKey(ENCRYPTION_KEY + salt, salt);
+  const key = deriveKey(WALLET_ENCRYPT_KEY + salt, salt);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
   const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
@@ -65,11 +69,12 @@ export function encryptAES(plaintext) {
 }
 
 export function decryptAES(encryptedHex, ivHex, salt) {
+  if (!WALLET_ENCRYPT_KEY) throw new Error('WALLET_ENCRYPT_KEY is not configured');
   const encryptedBuf = Buffer.from(encryptedHex, 'hex');
   const tag = encryptedBuf.subarray(encryptedBuf.length - 16);
   const data = encryptedBuf.subarray(0, encryptedBuf.length - 16);
   const iv = Buffer.from(ivHex, 'hex');
-  const key = deriveKey(ENCRYPTION_KEY + salt, salt);
+  const key = deriveKey(WALLET_ENCRYPT_KEY + salt, salt);
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(tag);
   return decipher.update(data, undefined, 'utf8') + decipher.final('utf8');
@@ -173,10 +178,14 @@ export function verifyPhantomSignature(publicKey, signedMessage, nonce) {
 // ── User Find / Create ──────────────────────────────────────────────────────
 
 export async function findOrCreateUser(provider, providerId, profile) {
+  console.log(`[AUTH] findOrCreateUser called — provider=${provider}, providerId=${providerId}`);
+
   let user = await User.findOne({
     'authProviders.provider': provider,
     'authProviders.providerId': providerId,
   });
+
+  console.log(`[AUTH] Existing user found: ${user ? `YES (id=${user._id}, hasWallet=${Boolean(user.wallet)})` : 'NO — creating new user'}`);
 
   if (!user) {
     // Generate unique username
@@ -184,19 +193,26 @@ export async function findOrCreateUser(provider, providerId, profile) {
     const existing = await User.findOne({ username });
     if (existing) username = `${username}_${Date.now().toString(36)}`;
 
+    console.log(`[AUTH] Generating wallet for new user...`);
+    // Auto-generate a Solana wallet for the new user
+    const wallet = generateSolanaWallet();
+    console.log(`[AUTH] Wallet generated — publicKey=${wallet.publicKey}`);
+
     user = await User.create({
       authProviders: [{ provider, providerId }],
       displayName: profile.displayName,
       username,
       email: profile.email || undefined,
       avatarUrl: profile.avatarUrl || undefined,
+      wallet,
     });
+    console.log(`[AUTH] New user created — id=${user._id}, hasWallet=${Boolean(user.wallet)}`);
   } else {
-    // Update profile info on each login
-    user.displayName = profile.displayName || user.displayName;
+    // Only update avatar and email on login — never overwrite displayName or username
     if (profile.avatarUrl) user.avatarUrl = profile.avatarUrl;
     if (profile.email && !user.email) user.email = profile.email;
     await user.save();
+    console.log(`[AUTH] Existing user updated — id=${user._id}, hasWallet=${Boolean(user.wallet)}`);
   }
 
   return user;

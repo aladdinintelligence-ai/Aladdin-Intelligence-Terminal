@@ -1,4 +1,18 @@
 import 'dotenv/config';
+
+// ── Validate required env vars before anything else ─────────────────────────
+const REQUIRED_ENV = [
+  'DB_URI',
+  'JWT_SECRET',
+  'WALLET_ENCRYPT_KEY',
+  'ENCRYPTION_KEY',
+];
+const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
+if (missing.length) {
+  console.error(`[STARTUP] FATAL: Missing required env vars: ${missing.join(', ')}`);
+  process.exit(1);
+}
+
 import express from 'express';
 import cors from 'cors';
 import { connectDB, corsHandler } from './configs/index.js';
