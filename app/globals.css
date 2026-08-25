@@ -518,7 +518,7 @@ main {
 }
 .terminalGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 315px;
+  grid-template-columns: minmax(0, 1fr) 415px;
   gap: 10px;
   margin: 10px 0;
 }

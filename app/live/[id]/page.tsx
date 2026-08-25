@@ -1,16 +1,18 @@
 "use client";
-import {use} from "react";
+import {use,useState} from "react";
 import {useRouter} from "next/navigation";
 import {ExternalLink,Globe,Twitter,LoaderCircle} from "lucide-react";
 import {useTokenInfo} from "@/app/hooks/useTokenInfo";
+import {useTokenChart} from "@/app/hooks/useTokenChart";
 import {Skeleton} from "@/app/components/ui/Skeleton";
-import {TokenChart} from "@/app/components/token/TokenChart";
+import {LiveTokenChart} from "@/app/components/token/LiveTokenChart";
 import {IfaNow} from "@/app/components/ifa/IfaNow";
 import {TerminalInvestigation} from "@/app/components/token/TerminalInvestigation";
 import {Badge} from "@/app/components/ui/Badge";
 import {money,pct} from "@/app/utils/format";
-import type {Token} from "@/app/types";
 import "@/app/components/ui/skeleton.css";
+
+const INTERVAL_MAP: Record<string, number> = { "1m": 1, "5m": 5, "15m": 15, "1h": 60 };
 
 function ageLabel(ms: number | null): string {
   if (!ms) return "Unknown";
@@ -46,6 +48,31 @@ function HeroSkeleton() {
   );
 }
 
+// Wrapper carries its own responsive height instead of `height: 100%` on the
+// iframe. Percentage heights only resolve if every ancestor up the chain
+// (.terminalGrid, .chartPanel.traderChart, etc.) has an explicit height —
+// if any of them is auto-sized, 100% collapses toward the content's natural
+// minimum, which is what was making the embed render tiny. clamp() keeps it
+// from getting cramped on mobile or absurdly tall on large desktop screens.
+function DexScreenerChart({ pairAddress, chain }: { pairAddress: string; chain: string }) {
+  const src = `https://dexscreener.com/${chain}/${pairAddress}?embed=1&theme=dark&trades=0&info=0`;
+  return (
+    <div
+      className="dexChartWrap"
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "clamp(360px, 62vh, 720px)",
+      }}
+    >
+      <iframe src={src}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none", background: "var(--bg)" }}
+        title="DexScreener Chart"
+        allow="clipboard-write" />
+    </div>
+  );
+}
+
 export default function Live({params, searchParams}: {
   params: Promise<{id: string}>;
   searchParams: Promise<{view?: string}>;
@@ -54,6 +81,8 @@ export default function Live({params, searchParams}: {
   const {view} = use(searchParams);
   const router = useRouter();
   const {token, loading, error} = useTokenInfo(mint);
+  const [chartTf, setChartTf] = useState("5m");
+  const {candles, loading: chartLoading, error: chartError} = useTokenChart(mint, INTERVAL_MAP[chartTf], 60);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(mint);
@@ -88,29 +117,6 @@ export default function Live({params, searchParams}: {
     );
   }
 
-  const mockToken: Token = {
-    id: mint.slice(0, 8),
-    mint,
-    symbol: token.symbol,
-    name: token.name,
-    age: ageLabel(token.pairCreatedAt),
-    mc: token.marketCapUsd ?? 0,
-    liquidity: token.liquidityUsd ?? 0,
-    volume: token.volume24h ?? 0,
-    buys: token.txns24h?.buys ?? 0,
-    sells: token.txns24h?.sells ?? 0,
-    buyers: (token.txns24h?.buys ?? 0),
-    migration: 100,
-    holders: 0,
-    creator: 0,
-    top10: 0,
-    profitable: 0,
-    retention: 0,
-    formation: "DISCOVERY",
-    change: token.priceChange24h ?? 0,
-    color: "#9b7cff",
-  };
-
   return (
     <>
       <div className="tokenHero">
@@ -132,11 +138,22 @@ export default function Live({params, searchParams}: {
           </p>
         </div>
         <div className="heroMetrics">
-          <div>
-            <small>MARKET CAP</small>
-            <b>{token.marketCapUsd != null ? money(token.marketCapUsd) : "—"}</b>
-            {token.priceChange24h != null && <em>{pct(token.priceChange24h)}</em>}
-          </div>
+        <div>
+  <small>MARKET CAP</small>
+  <b>{token.marketCapUsd != null ? money(token.marketCapUsd) : "—"}</b>
+
+  {token.priceChange24h != null && (
+    <em
+      style={{
+        color: token.priceChange24h >= 0 ? "green" : "red",
+        fontWeight: "bold",
+        "fontSize": "12px",
+      }}
+    >
+      {pct(token.priceChange24h)}
+    </em>
+  )}
+</div>
           <div>
             <small>LIQUIDITY</small>
             <b>{token.liquidityUsd != null ? money(token.liquidityUsd) : "—"}</b>
@@ -151,7 +168,7 @@ export default function Live({params, searchParams}: {
           </div>
           <div>
             <small>PRICE</small>
-            <b>{token.priceUsd != null ? `$${token.priceUsd < 0.01 ? token.priceUsd.toExponential(2) : token.priceUsd.toFixed(6)}` : "—"}</b>
+            <b>{token.priceUsd != null ? `$${token.priceUsd < 0.000001 ? token.priceUsd.toFixed(10) : token.priceUsd < 0.01 ? token.priceUsd.toFixed(8) : token.priceUsd.toFixed(6)}` : "—"}</b>
           </div>
         </div>
         <div style={{display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap"}}>
@@ -174,10 +191,11 @@ export default function Live({params, searchParams}: {
         </div>
       </div>
       <div className="terminalGrid">
-        <TokenChart tokenId={mint.slice(0, 8)} />
+        {/* <LiveTokenChart candles={candles} loading={chartLoading} error={chartError} tf={chartTf} onTfChange={setChartTf} /> */}
+        <DexScreenerChart pairAddress={mint} chain={"solana"} />
         <IfaNow />
       </div>
-      <TerminalInvestigation token={mockToken} initialView={view} />
+      <TerminalInvestigation mint={mint} symbol={token.symbol} initialView={view} />
     </>
   );
 }
