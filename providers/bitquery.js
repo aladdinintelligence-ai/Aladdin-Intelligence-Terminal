@@ -18,7 +18,7 @@ function headers() {
   return { 'Content-Type': 'application/json', 'X-API-KEY': _apiKey };
 }
 
-async function graphql(query, label = '') {
+export async function graphql(query, label = '') {
   if (!_apiKey) return { error: 'BITQUERY_API_KEY not configured', data: null };
   try {
     const response = await axios.post(_baseUrl, { query }, { headers: headers(), timeout: _timeout });
@@ -551,3 +551,49 @@ export async function fetchTokenDetails(mint) {
 }
 
 // bitquery
+// Fetch OHLC candle data for a token
+export async function fetchTokenOHLC(mint, { intervalMinutes = 5, limit = 100 } = {}) {
+  const SOL_MINT = 'So11111111111111111111111111111111111111112';
+  const query = `{
+    Solana(dataset: combined) {
+      DEXTradeByTokens(
+        orderBy: { descendingByField: "Block_Timefield" }
+        limit: { count: ${limit} }
+        where: {
+          Trade: {
+            Currency: { MintAddress: { is: "${mint}" } }
+            Side: { Currency: { MintAddress: { is: "${SOL_MINT}" } } }
+            Amount: { gt: "0" }
+          }
+          Transaction: { Result: { Success: true } }
+        }
+      ) {
+        Block {
+          Timefield: Time(interval: { in: minutes, count: ${intervalMinutes} })
+        }
+        volume: sum(of: Trade_Side_AmountInUSD)
+        count
+        open: quantile(of: Trade_PriceInUSD, level: 0.5)
+        close: quantile(of: Trade_PriceInUSD, level: 0.5)
+        high: quantile(of: Trade_PriceInUSD, level: 0.95)
+        low: quantile(of: Trade_PriceInUSD, level: 0.05)
+      }
+    }
+  }`;
+
+  const result = await graphql(query, ':ohlc');
+  if (result.error) return { error: result.error, candles: [] };
+
+  const raw = result.data?.Solana?.DEXTradeByTokens || [];
+  const candles = raw.map(c => ({
+    time: c.Block?.Timefield,
+    open: parseFloat(c.open) || 0,
+    high: parseFloat(c.high) || 0,
+    low: parseFloat(c.low) || 0,
+    close: parseFloat(c.close) || 0,
+    volume: parseFloat(c.volume) || 0,
+    trades: parseInt(c.count) || 0,
+  })).reverse();
+
+  return { error: null, candles };
+}

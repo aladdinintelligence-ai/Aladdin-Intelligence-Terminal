@@ -3,6 +3,8 @@ import { tokensController, internalController, healthController, launchesControl
 import { requireAuth } from '../middleware/auth.js';
 import swapRouter from './swap.js';
 import { getTokenInfoController } from '../controllers/token/tokenInfoController.js';
+import { getTokenChartController } from '../controllers/token/tokenChartController.js';
+import { getTokenDetailController } from '../controllers/token/tokenDetailController.js';
 
 const router = Router();
 
@@ -11,7 +13,8 @@ router.get('/health', healthController.healthController);
 router.use(swapRouter);
 
 router.get('/api/token-info/:mint', getTokenInfoController);
-
+router.get('/api/token-chart/:mint', getTokenChartController);
+router.get('/api/token-detail/:mint', getTokenDetailController);
 router.get('/api/launches', launchesController.getLaunchesController);
 
 router.post('/api/tokens/:mint/sync', requireAuth, tokensController.syncTokenController);
