@@ -1,15 +1,5 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-let authToken: string | null = null;
-
-export function setAuthToken(token: string | null) {
-  authToken = token;
-}
-
-export function getAuthToken(): string | null {
-  return authToken;
-}
-
 export async function apiFetch<T = unknown>(
   path: string,
   options: RequestInit = {},
@@ -19,13 +9,10 @@ export async function apiFetch<T = unknown>(
     ...(options.headers as Record<string, string>),
   };
 
-  if (authToken) {
-    headers["Authorization"] = `Bearer ${authToken}`;
-  }
-
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers,
+    credentials: "include",
   });
 
   const data = await response.json();

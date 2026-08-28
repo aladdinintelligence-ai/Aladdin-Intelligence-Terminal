@@ -45,7 +45,7 @@ function WalletStateBridge({children}:{children:ReactNode}){
         if(!signedBytes){setError("Wallet did not sign the message");return}
         const signedMessage=Buffer.from(signedBytes).toString("base64");
         const response=await phantomLogin({publicKey:publicKey.toBase58(),signedMessage,nonce});
-        auth.setAuth(response.token,response.user);
+        auth.setAuth(response.user);
         beginAccount("wallet");
       }catch(err){setError(err instanceof Error?err.message:"Phantom authentication failed")}
       finally{setPhantomAuthPending(false)}

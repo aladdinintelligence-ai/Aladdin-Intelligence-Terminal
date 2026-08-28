@@ -16,11 +16,11 @@ export function EntryModal({open,onClose,onAuth}:{open:boolean;onClose:()=>void;
   useEffect(()=>{if(!open)return;closeRef.current?.focus();const key=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose()};addEventListener("keydown",key);return()=>removeEventListener("keydown",key)},[onClose,open]);
 
   const handleGoogleAuth=useCallback(async(idToken:string)=>{
-    try{setLoading("google");setError(null);const response=await googleLogin(idToken);auth.setAuth(response.token,response.user);if(onAuth){onAuth()}else{router.push("/launches")}}catch(err){setError(err instanceof Error?err.message:"Google sign-in failed");setLoading(null)}
+    try{setLoading("google");setError(null);const response=await googleLogin(idToken);auth.setAuth(response.user);if(onAuth){onAuth()}else{router.push("/launches")}}catch(err){setError(err instanceof Error?err.message:"Google sign-in failed");setLoading(null)}
   },[auth,router,onAuth]);
 
   const handleTelegramAuth=useCallback(async(data:{id:number;first_name:string;last_name?:string;username?:string;photo_url?:string;auth_date:number;hash:string})=>{
-    try{setLoading("telegram");setError(null);const response=await telegramLogin(data);auth.setAuth(response.token,response.user);if(onAuth){onAuth()}else{router.push("/launches")}}catch(err){setError(err instanceof Error?err.message:"Telegram sign-in failed");setLoading(null)}
+    try{setLoading("telegram");setError(null);const response=await telegramLogin(data);auth.setAuth(response.user);if(onAuth){onAuth()}else{router.push("/launches")}}catch(err){setError(err instanceof Error?err.message:"Telegram sign-in failed");setLoading(null)}
   },[auth,router,onAuth]);
 
   const openTelegramAuth=useCallback(()=>{

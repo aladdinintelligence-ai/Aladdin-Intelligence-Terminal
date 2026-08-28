@@ -20,6 +20,7 @@ export interface LaunchToken {
   symbol: string;
   name: string;
   color: string;
+  imageUrl: string | null;
   lifecycle: LaunchLifecycle;
   ageMinutes: number;
   marketCap: number;

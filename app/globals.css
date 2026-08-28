@@ -788,6 +788,9 @@ main {
   color: var(--green);
   font-style: normal;
 }
+.evidenceRow em.negative {
+  color: var(--red);
+}
 .evidenceRow span {
   color: #888;
   font-size: 9px;

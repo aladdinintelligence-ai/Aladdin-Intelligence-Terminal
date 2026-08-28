@@ -28,13 +28,17 @@ export function LaunchFeedRow({
         href={`/live/${token.mint}`}
         aria-label={`Open ${token.symbol} in Terminal`}
       >
-        <SyntheticTokenImage
-          id={token.id}
-          symbol={token.symbol}
-          color={token.color}
-          lifecycle={token.lifecycle}
-          variant="feed"
-        />
+        {token.imageUrl ? (
+          <img src={token.imageUrl} alt={token.symbol} className="launchFeedImageEl" />
+        ) : (
+          <SyntheticTokenImage
+            id={token.id}
+            symbol={token.symbol}
+            color={token.color}
+            lifecycle={token.lifecycle}
+            variant="feed"
+          />
+        )}
       </Link>
       <div className="launchFeedBody">
         <header className="launchFeedIdentity">

@@ -7,49 +7,34 @@ import {
   type ReactNode,
 } from "react";
 import type { AuthUser } from "@/app/types/auth";
-import { apiFetch, setAuthToken } from "@/app/lib/api";
+import { apiFetch } from "@/app/lib/api";
 
 export interface AuthContextValue {
   user: AuthUser | null;
-  token: string | null;
   loading: boolean;
-  setAuth: (token: string, user: AuthUser) => void;
+  setAuth: (user: AuthUser) => void;
   updateUser: (user: AuthUser) => void;
   signOut: () => void;
 }
 
-const TOKEN_KEY = "aladdin-auth-token-v1";
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem(TOKEN_KEY);
-    if (!stored) {
-      setLoading(false);
-      return;
-    }
-    setAuthToken(stored);
-    setToken(stored);
     apiFetch<AuthUser>("/api/auth/me")
       .then((profile) => {
         setUser(profile);
       })
       .catch(() => {
-        localStorage.removeItem(TOKEN_KEY);
-        setAuthToken(null);
-        setToken(null);
+        setUser(null);
       })
       .finally(() => setLoading(false));
   }, []);
 
-  const setAuth = useCallback((newToken: string, newUser: AuthUser) => {
-    localStorage.setItem(TOKEN_KEY, newToken);
-    setAuthToken(newToken);
-    setToken(newToken);
+  const setAuth = useCallback((newUser: AuthUser) => {
     setUser(newUser);
   }, []);
 
@@ -58,14 +43,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    setAuthToken(null);
-    setToken(null);
+    apiFetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, setAuth, updateUser, signOut }}>
+    <AuthContext.Provider value={{ user, loading, setAuth, updateUser, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,6 +1,6 @@
 export type Behaviour = "Migration Specialist"|"Scalper"|"Creator"|"Cluster Wallet"|"Fresh Wallet"|"Unknown"|"Bundle Specialist"|"Smart Money"|"Insider";
 export type Formation = "DISCOVERY"|"EARLY ACCUMULATION"|"BROAD ACCUMULATION"|"CONCENTRATED ACCUMULATION"|"PARTICIPATION EXPANSION"|"MIGRATION POSITIONING"|"POST-MIGRATION EXPANSION"|"DISTRIBUTION"|"ROTATION"|"EXHAUSTION"|"FAILED FORMATION";
-export interface Token {id:string;mint:string;symbol:string;name:string;age:string;mc:number;liquidity:number;volume:number;buys:number;sells:number;buyers:number;migration:number;holders:number;creator:number;top10:number;profitable:number;retention:number;formation:Formation;change:number;color:string}
+export interface Token {id:string;mint:string;symbol:string;name:string;age:string;mc:number;liquidity:number;volume:number;buys:number;sells:number;buyers:number;migration:number;holders:number;creator:number;top10:number;profitable:number;retention:number;formation:Formation;change:number;color:string;imageUrl?:string|null}
 export interface Wallet {id:string;address:string;short:string;behaviour:Behaviour;secondary:Behaviour;pnl:number;pnl7d:number;winRate:number;trades:number;holding:string;entry:string;medianSize:string;medianHold:string}
 export interface Trade {id:string;tokenId:string;walletId:string;time:string;side:"BUY"|"SELL";amount:number;position:string;supply:string;remaining:number}
 export interface Observation {title:string;detail:string;metric:string;tone:"good"|"warn"|"bad";action:string}
