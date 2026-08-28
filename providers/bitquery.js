@@ -597,3 +597,123 @@ export async function fetchTokenOHLC(mint, { intervalMinutes = 5, limit = 100 } 
 
   return { error: null, candles };
 }
+
+// ── Movers ─────────────────────────────────────────────────────────────────
+// Fetch top traded meme tokens by volume over the last 24h.
+// Filters to Pump.fun tokens (ending with "pump") and excludes major tokens.
+// Market data (price, mc, liquidity, priceChange) is fetched separately
+// from DexScreener in the controller.
+
+const MAJOR_MINTS = new Set([
+  SOL_MINT,
+  USDC_MINT,
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
+  'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',  // mSOL
+  'stqEc6wXJb1XDjL5DyEXsLpfR7CfQ1F2tSCLXJxK66z',   // stSOL
+  '7dHbWXmci3dT8UFYWYZweBLXgycu7Y3iL6trKn1XS7et',  // bSOL
+]);
+const MAJOR_SYMBOLS = new Set(['SOL', 'USDC', 'USDT', 'WSOL', 'MSOL', 'STSOL']);
+
+export async function fetchMovers(limit = 30) {
+  const since = sinceIso(24);
+
+  // Fetch more than needed since we'll filter out major tokens
+  const fetchLimit = limit * 3;
+
+  const volQuery = `{
+    Solana {
+      trades: DEXTradeByTokens(
+        limitBy: { by: Trade_Currency_MintAddress, count: 1 }
+        limit: { count: ${fetchLimit} }
+        orderBy: { descendingByField: "VolumeInUSD" }
+        where: {
+          Trade: {
+            Amount: { gt: "0" }
+            Currency: { MintAddress: { endsWith: "pump" } }
+          }
+          Transaction: { Result: { Success: true } }
+          Block: { Time: { since: "${since}" } }
+        }
+      ) {
+        VolumeInUSD: sum(of: Trade_Side_AmountInUSD)
+        Trade { Currency { MintAddress Name Symbol } }
+      }
+    }
+  }`;
+
+  const { error, data } = await graphql(volQuery, 'fetchMovers');
+  if (error) return { error, tokens: [] };
+
+  const trades = data?.Solana?.trades || [];
+
+  // Filter out major tokens in JavaScript
+  const filtered = trades.filter(trade => {
+    const mint = trade.Trade?.Currency?.MintAddress || '';
+    const symbol = (trade.Trade?.Currency?.Symbol || '').toUpperCase();
+    if (MAJOR_MINTS.has(mint)) return false;
+    if (MAJOR_SYMBOLS.has(symbol)) return false;
+    return true;
+  });
+
+  const tokens = filtered.slice(0, limit);
+  const mints = tokens.map(t => t.Trade?.Currency?.MintAddress).filter(Boolean);
+
+  if (mints.length === 0) return { error: null, tokens: [] };
+
+  const buyerCounts = await fetchBuyerCountsForMints(mints, 24, 'fetchMovers');
+
+  return {
+    error: null,
+    tokens: tokens.map(trade => {
+      const mint = trade.Trade?.Currency?.MintAddress || '';
+      return {
+        mint,
+        name: trade.Trade?.Currency?.Name || '',
+        symbol: trade.Trade?.Currency?.Symbol || '',
+        volume: parseFloat(trade.VolumeInUSD) || 0,
+        buyers: buyerCounts.get(mint) || 0,
+      };
+    }),
+  };
+}
+
+async function fetchBuyerCountsForMints(mints, hours, label = '') {
+  const counts = new Map();
+  if (mints.length === 0) return counts;
+
+  const since = sinceIso(hours);
+  const rowLimit = Math.min(Math.max(mints.length * 50, 1000), 25000);
+
+  const query = `{
+    Solana {
+      DEXTradeByTokens(
+        limit: { count: ${rowLimit} }
+        orderBy: { descending: Block_Time }
+        where: {
+          Trade: { Currency: { MintAddress: { in: [${gqlStr(mints)}] } }, Side: { Type: { is: "buy" } }, Amount: { gt: "0" } }
+          Transaction: { Result: { Success: true } }
+          Block: { Time: { since: "${since}" } }
+        }
+      ) {
+        Trade { Currency { MintAddress } Account { Address } }
+      }
+    }
+  }`;
+
+  const { error, data } = await graphql(query, label);
+  if (error) return counts;
+
+  const seen = new Map();
+  for (const row of data?.Solana?.DEXTradeByTokens || []) {
+    const mint = row.Trade?.Currency?.MintAddress;
+    const wallet = row.Trade?.Account?.Address;
+    if (!mint || !wallet) continue;
+    if (!seen.has(mint)) seen.set(mint, new Set());
+    seen.get(mint).add(wallet);
+  }
+
+  for (const [mint, wallets] of seen) {
+    counts.set(mint, wallets.size);
+  }
+  return counts;
+}

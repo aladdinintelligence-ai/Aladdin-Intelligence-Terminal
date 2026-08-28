@@ -4,11 +4,17 @@ import {
   fetchMigratedTokens,
   fetchTrendingTokens,
 } from '../../providers/bitquery.js';
+import { Token } from '../../models/token.model.js';
+import axios from 'axios';
 
 const CACHE_TTL = 120_000;
 const STALE_TTL = 300_000;
 const responseCache = new Map();
 const inflightRequests = new Map();
+
+const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex/tokens';
+const imageCache = new Map();
+const IMAGE_CACHE_TTL = 300_000;
 
 function generateColor(mint) {
   const colors = [
@@ -28,6 +34,65 @@ function generateColor(mint) {
 function ageMinutes(isoString) {
   if (!isoString) return null;
   return Math.round((Date.now() - new Date(isoString).getTime()) / 60000);
+}
+
+async function enrichWithImageUrls(tokens) {
+  const mints = tokens.map((t) => t.mint).filter(Boolean);
+  if (!mints.length) return tokens;
+
+  // 1. Check memory cache
+  const imageMap = new Map();
+  const missing = [];
+  for (const mint of mints) {
+    const cached = imageCache.get(mint);
+    if (cached && Date.now() - cached.ts < IMAGE_CACHE_TTL) {
+      if (cached.url) imageMap.set(mint, cached.url);
+    } else {
+      missing.push(mint);
+    }
+  }
+
+  // 2. Check MongoDB for remaining
+  if (missing.length) {
+    const docs = await Token.find({ _id: { $in: missing } }).select('imageUrl').lean();
+    for (const doc of docs) {
+      if (doc.imageUrl) {
+        imageMap.set(doc._id, doc.imageUrl);
+        imageCache.set(doc._id, { url: doc.imageUrl, ts: Date.now() });
+      }
+    }
+    const stillMissing = missing.filter((m) => !imageMap.has(m));
+
+    // 3. Fetch from DexScreener for any still missing (batch up to 30)
+    if (stillMissing.length) {
+      try {
+        const batch = stillMissing.slice(0, 30);
+        const { data } = await axios.get(`${DEXSCREENER_API}/${batch.join(',')}`, { timeout: 8000 });
+        const pairs = data?.pairs || [];
+        for (const pair of pairs) {
+          const mint = pair?.baseToken?.address;
+          const url = pair?.info?.imageUrl || null;
+          if (mint && url) {
+            imageMap.set(mint, url);
+            imageCache.set(mint, { url, ts: Date.now() });
+          }
+        }
+        // Cache misses too so we don't re-fetch
+        for (const mint of stillMissing) {
+          if (!imageMap.has(mint)) {
+            imageCache.set(mint, { url: null, ts: Date.now() });
+          }
+        }
+      } catch (err) {
+        console.error(`[launches] DexScreener image fetch failed:`, err.message);
+      }
+    }
+  }
+
+  return tokens.map((t) => ({
+    ...t,
+    imageUrl: imageMap.get(t.mint) || null,
+  }));
 }
 
 function baseToken(t, lifecycle) {
@@ -176,7 +241,8 @@ async function refreshCache(tab, limit, cacheKey) {
     if (result.error) throw new Error(result.error);
 
     const mapper = mappers[tab];
-    const tokens = mapper(result.tokens);
+    const mapped = mapper(result.tokens);
+    const tokens = await enrichWithImageUrls(mapped);
 
     const response = {
       data: tokens,

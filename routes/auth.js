@@ -9,6 +9,7 @@ authRouter.post('/api/auth/phantom', authController.phantomLogin);
 authRouter.post('/api/auth/google', authController.googleLogin);
 authRouter.post('/api/auth/telegram', authController.telegramLogin);
 authRouter.get('/api/auth/nonce', authController.getNonce);
+authRouter.post('/api/auth/logout', authController.logout);
 
 // Protected routes
 authRouter.get('/api/auth/me', requireAuth, authController.getMe);

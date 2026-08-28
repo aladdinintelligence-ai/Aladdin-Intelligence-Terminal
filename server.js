@@ -15,6 +15,7 @@ if (missing.length) {
 
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { connectDB, corsHandler } from './configs/index.js';
 import { initSolanaTrackerProvider } from './providers/solanaTracker.js';
 import { initBitqueryProvider } from './providers/bitquery.js';
@@ -25,6 +26,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(express.json({ limit: '10mb' }));
+app.use(cookieParser());
 app.use(cors({
   origin: corsHandler,
   credentials: true,

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { tokensController, internalController, healthController, launchesController } from '../controllers/index.js';
+import { tokensController, internalController, healthController, launchesController, moversController } from '../controllers/index.js';
 import { requireAuth } from '../middleware/auth.js';
 import swapRouter from './swap.js';
 import { getTokenInfoController } from '../controllers/token/tokenInfoController.js';
@@ -16,6 +16,7 @@ router.get('/api/token-info/:mint', getTokenInfoController);
 router.get('/api/token-chart/:mint', getTokenChartController);
 router.get('/api/token-detail/:mint', getTokenDetailController);
 router.get('/api/launches', launchesController.getLaunchesController);
+router.get('/api/movers', moversController.getMoversController);
 
 router.post('/api/tokens/:mint/sync', requireAuth, tokensController.syncTokenController);
 router.get('/api/tokens/:mint', requireAuth, tokensController.getTokenController);

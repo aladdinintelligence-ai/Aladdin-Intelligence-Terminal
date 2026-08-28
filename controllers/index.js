@@ -4,3 +4,4 @@ export * as healthController from './health/healthController.js';
 export * as authController from './auth/authController.js';
 export * as launchesController from './launches/launchesController.js';
 export * as swapController from './swap/swapController.js';
+export * as moversController from './movers/moversController.js';

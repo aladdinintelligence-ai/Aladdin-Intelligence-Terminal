@@ -1,4 +1,5 @@
 import * as authService from '../../services/authService.js';
+import { authCookieOptions } from '../../configs/index.js';
 
 function userResponse(user) {
   return {
@@ -42,7 +43,8 @@ export async function phantomLogin(req, res, next) {
 
     const token = authService.generateJWT(user._id);
     console.log(`[AUTH:phantom] Success — userId=${user._id}, hasWallet=${Boolean(user.wallet)}, walletPubkey=${user.wallet?.publicKey || 'NONE'}`);
-    res.json({ token, user: userResponse(user) });
+    res.cookie('token', token, authCookieOptions);
+    res.json({ user: userResponse(user) });
   } catch (err) {
     console.error(`[AUTH:phantom] Error:`, err.message);
     next(err);
@@ -69,7 +71,8 @@ export async function googleLogin(req, res, next) {
 
     const token = authService.generateJWT(user._id);
     console.log(`[AUTH:google] Success — userId=${user._id}, hasWallet=${Boolean(user.wallet)}, walletPubkey=${user.wallet?.publicKey || 'NONE'}`);
-    res.json({ token, user: userResponse(user) });
+    res.cookie('token', token, authCookieOptions);
+    res.json({ user: userResponse(user) });
   } catch (err) {
     console.error(`[AUTH:google] Error:`, err.message);
     next(err);
@@ -96,7 +99,8 @@ export async function telegramLogin(req, res, next) {
 
     const token = authService.generateJWT(user._id);
     console.log(`[AUTH:telegram] Success — userId=${user._id}, hasWallet=${Boolean(user.wallet)}, walletPubkey=${user.wallet?.publicKey || 'NONE'}`);
-    res.json({ token, user: userResponse(user) });
+    res.cookie('token', token, authCookieOptions);
+    res.json({ user: userResponse(user) });
   } catch (err) {
     console.error(`[AUTH:telegram] Error:`, err.message);
     next(err);
@@ -212,4 +216,11 @@ export async function getWallet(req, res, next) {
   } catch (err) {
     next(err);
   }
+}
+
+// ── Logout ──────────────────────────────────────────────────────────────────
+
+export function logout(_req, res) {
+  res.clearCookie('token', authCookieOptions);
+  res.json({ message: 'Logged out' });
 }
