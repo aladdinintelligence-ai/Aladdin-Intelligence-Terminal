@@ -7,7 +7,7 @@ import { wallets } from "@/app/data/wallets";
 import { money, pct } from "@/app/utils/format";
 import { Badge } from "@/app/components/ui/Badge";
 import { behaviourColor } from "@/app/utils/behaviour";
-import { useMovers, type MoverToken } from "@/app/hooks/useMovers";
+import { useMovers } from "@/app/hooks/useMovers";
 
 const copy: Record<string, { eyebrow: string; title: string; desc: string; question: string }> = {
   "movers": { eyebrow: "MARKET", title: "Movers + Why", desc: "Price movement explained through participation and ownership changes.", question: "What moved, and what changed underneath?" },
@@ -81,7 +81,7 @@ function EvidenceRows({ kind }: { kind: string }) {
 
   return (
     <div className="evidenceRows">
-      {rows.map((t: MoverToken, i: number) => (
+      {rows.map((t, i) => (
         <Link href={`/live/${t.mint || t.id}`} className="evidenceRow" key={t.mint || t.id}>
           {t.imageUrl ? (
             <img src={t.imageUrl} alt={t.symbol} className="coin" style={{ objectFit: "cover" }} />
