@@ -19,6 +19,7 @@ import cookieParser from 'cookie-parser';
 import { connectDB, corsHandler } from './configs/index.js';
 import { initSolanaTrackerProvider } from './providers/solanaTracker.js';
 import { initBitqueryProvider } from './providers/bitquery.js';
+import { initChainStreamProvider } from './providers/chainstream.js';
 import router from './routes/index.js';
 import authRouter from './routes/auth.js';
 
@@ -58,6 +59,12 @@ initSolanaTrackerProvider({
 initBitqueryProvider({
   baseUrl: process.env.BITQUERY_BASE_URL,
   apiKey: process.env.BITQUERY_API_KEY,
+});
+
+initChainStreamProvider({
+  baseUrl: process.env.CHAINSTREAM_BASE_URL,
+  apiKey: process.env.CHAINSTREAM_API_KEY,
+  timeoutMs: parseInt(process.env.CHAINSTREAM_TIMEOUT_MS) || 30000,
 });
 
 await connectDB(process.env.DB_URI || 'mongodb://localhost:27017/aladdin-db');

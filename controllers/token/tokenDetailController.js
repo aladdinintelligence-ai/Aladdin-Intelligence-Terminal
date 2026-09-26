@@ -1,9 +1,9 @@
-import { graphql as bitqueryGraphql } from '../../providers/bitquery.js';
+import { graphql as providerGraphql, provider as dataProvider } from '../../providers/index.js';
 
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
 
 async function gql(query, label = '') {
-  return bitqueryGraphql(query, label);
+  return providerGraphql(query, label);
 }
 
 const cache = new Map();
@@ -17,7 +17,6 @@ async function fetchTrades(mint, limit = 50) {
         orderBy: { descending: Block_Time }
         where: {
           Trade: { Currency: { MintAddress: { is: "${mint}" } }, Amount: { gt: "0" } }
-          Transaction: { Result: { Success: true } }
         }
       ) {
         Block { Time }
@@ -25,9 +24,9 @@ async function fetchTrades(mint, limit = 50) {
           Side { Type }
           Amount
           PriceInUSD
-          Account { Address }
+          Account { Owner }
         }
-        Transaction { Signature }
+        Transaction { Hash }
       }
     }
   }`;
@@ -39,8 +38,8 @@ async function fetchTrades(mint, limit = 50) {
     side: t.Trade?.Side?.Type?.toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
     amount: parseFloat(t.Trade?.Amount) || 0,
     priceUsd: parseFloat(t.Trade?.PriceInUSD) || 0,
-    wallet: t.Trade?.Account?.Address || '',
-    signature: t.Transaction?.Signature || '',
+    wallet: t.Trade?.Account?.Owner || '',
+    signature: t.Transaction?.Hash || '',
   }));
 }
 
@@ -52,7 +51,6 @@ async function fetchParticipants(mint, limit = 50) {
         orderBy: { descending: Block_Time }
         where: {
           Trade: { Currency: { MintAddress: { is: "${mint}" } }, Amount: { gt: "0" } }
-          Transaction: { Result: { Success: true } }
         }
       ) {
         Block { Time }
@@ -60,9 +58,9 @@ async function fetchParticipants(mint, limit = 50) {
           Side { Type }
           Amount
           PriceInUSD
-          Account { Address }
+          Account { Owner }
         }
-        Transaction { Signature }
+        Transaction { Hash }
       }
     }
   }`;
@@ -71,7 +69,7 @@ async function fetchParticipants(mint, limit = 50) {
 
   const byWallet = new Map();
   for (const t of data?.Solana?.DEXTradeByTokens || []) {
-    const addr = t.Trade?.Account?.Address;
+    const addr = t.Trade?.Account?.Owner;
     if (!addr) continue;
     if (!byWallet.has(addr)) {
       byWallet.set(addr, { wallet: addr, trades: 0, buys: 0, sells: 0, totalVolumeUsd: 0, firstTrade: t.Block?.Time, lastTrade: t.Block?.Time });
@@ -99,18 +97,15 @@ async function fetchParticipants(mint, limit = 50) {
 async function fetchHolders(mint, limit = 50) {
   const query = `{
     Solana {
-      BalanceUpdates(
+      TokenHolders(
         limit: { count: 500 }
-        orderBy: { descending: Block_Slot }
         where: {
-          BalanceUpdate: { Currency: { MintAddress: { is: "${mint}" } } }
-          Transaction: { Result: { Success: true } }
+          Token: { Address: { is: "${mint}" } }
         }
       ) {
-        BalanceUpdate {
-          Account { Address }
-          PostBalance
-        }
+        Token { Address }
+        Holder { Address }
+        LatestBalance
       }
     }
   }`;
@@ -118,9 +113,9 @@ async function fetchHolders(mint, limit = 50) {
   if (error) return [];
 
   const balances = new Map();
-  for (const row of data?.Solana?.BalanceUpdates || []) {
-    const addr = row.BalanceUpdate?.Account?.Address;
-    const bal = parseFloat(row.BalanceUpdate?.PostBalance) || 0;
+  for (const row of data?.Solana?.TokenHolders || []) {
+    const addr = row.Holder?.Address;
+    const bal = parseFloat(row.LatestBalance) || 0;
     if (addr && bal > 0) balances.set(addr, bal);
   }
 
@@ -145,12 +140,11 @@ async function fetchFirstBuyers(mint, limit = 100) {
         orderBy: { ascending: Block_Time }
         where: {
           Trade: { Currency: { MintAddress: { is: "${mint}" } }, Side: { Type: { is: "buy" } }, Amount: { gt: "0" } }
-          Transaction: { Result: { Success: true } }
         }
       ) {
         Block { Time }
-        Trade { Amount PriceInUSD Account { Address } }
-        Transaction { Signature }
+        Trade { Amount PriceInUSD Account { Owner } }
+        Transaction { Hash }
       }
     }
   }`;
@@ -160,7 +154,7 @@ async function fetchFirstBuyers(mint, limit = 100) {
   const seen = new Set();
   const buyers = [];
   for (const t of data?.Solana?.DEXTradeByTokens || []) {
-    const addr = t.Trade?.Account?.Address;
+    const addr = t.Trade?.Account?.Owner;
     if (!addr || seen.has(addr)) continue;
     seen.add(addr);
     buyers.push({
@@ -184,38 +178,31 @@ async function fetchTokenStats(mint) {
       trades24h: DEXTradeByTokens(
         where: {
           Trade: { Currency: { MintAddress: { is: "${mint}" } }, Amount: { gt: "0" } }
-          Transaction: { Result: { Success: true } }
           Block: { Time: { since: "${since24h}" } }
         }
       ) {
-        count
-        volume: sum(of: Trade_Side_AmountInUSD)
-        buys: sum(of: Trade_Side_AmountInUSD, if: { Trade: { Side: { Type: { is: "buy" } } } })
-        sells: sum(of: Trade_Side_AmountInUSD, if: { Trade: { Side: { Type: { is: "sell" } } } })
+        TradeCount24h: count
+        Volume24h: sum(of: Trade_AmountInUSD)
+        Buys24h: sum(of: Trade_AmountInUSD, if: { Trade: { Side: { Type: { is: "buy" } } } })
+        Sells24h: sum(of: Trade_AmountInUSD, if: { Trade: { Side: { Type: { is: "sell" } } } })
       }
       trades1h: DEXTradeByTokens(
         where: {
           Trade: { Currency: { MintAddress: { is: "${mint}" } }, Amount: { gt: "0" } }
-          Transaction: { Result: { Success: true } }
           Block: { Time: { since: "${since1h}" } }
         }
       ) {
-        count
-        volume: sum(of: Trade_Side_AmountInUSD)
+        TradeCount1h: count
+        Volume1h: sum(of: Trade_AmountInUSD)
       }
-      holders: BalanceUpdates(
-        limitBy: { by: [BalanceUpdate_Currency_MintAddress, BalanceUpdate_Account_Address], count: 1 }
+      holders: TokenHolders(
         limit: { count: 5000 }
-        orderBy: { descending: Block_Slot }
         where: {
-          BalanceUpdate: { Currency: { MintAddress: { is: "${mint}" } } }
-          Transaction: { Result: { Success: true } }
+          Token: { Address: { is: "${mint}" } }
         }
       ) {
-        BalanceUpdate {
-          Account { Address }
-          PostBalance
-        }
+        Holder { Address }
+        LatestBalance
       }
     }
   }`;
@@ -227,8 +214,8 @@ async function fetchTokenStats(mint) {
 
   const balances = new Map();
   for (const row of data?.Solana?.holders || []) {
-    const addr = row.BalanceUpdate?.Account?.Address;
-    const bal = parseFloat(row.BalanceUpdate?.PostBalance) || 0;
+    const addr = row.Holder?.Address;
+    const bal = parseFloat(row.LatestBalance) || 0;
     if (addr && bal > 0) balances.set(addr, bal);
   }
   const holderCount = balances.size;
@@ -237,12 +224,12 @@ async function fetchTokenStats(mint) {
   const top10Pct = totalSupply > 0 ? ((sorted.slice(0, 10).reduce((s, v) => s + v, 0) / totalSupply) * 100).toFixed(1) : '0';
 
   return {
-    trades24h: parseInt(t24?.count) || 0,
-    volume24h: parseFloat(t24?.volume) || 0,
-    buys24h: parseFloat(t24?.buys) || 0,
-    sells24h: parseFloat(t24?.sells) || 0,
-    trades1h: parseInt(t1h?.count) || 0,
-    volume1h: parseFloat(t1h?.volume) || 0,
+    trades24h: parseInt(t24?.TradeCount24h) || 0,
+    volume24h: parseFloat(t24?.Volume24h) || 0,
+    buys24h: parseFloat(t24?.Buys24h) || 0,
+    sells24h: parseFloat(t24?.Sells24h) || 0,
+    trades1h: parseInt(t1h?.TradeCount1h) || 0,
+    volume1h: parseFloat(t1h?.Volume1h) || 0,
     holders: holderCount,
     top10Pct: parseFloat(top10Pct),
   };
@@ -283,7 +270,7 @@ export async function getTokenDetailController(req, res, next) {
 
     const response = {
       data,
-      meta: { mint, tab, count: Array.isArray(data) ? data.length : 1, source: 'bitquery', fetchedAt: new Date().toISOString() },
+      meta: { mint, tab, count: Array.isArray(data) ? data.length : 1, source: dataProvider, fetchedAt: new Date().toISOString() },
     };
 
     cache.set(cacheKey, { data: response, ts: Date.now() });

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { fetchMovers as fetchMoversFromBitquery } from '../../providers/bitquery.js';
+import { fetchMovers as fetchMoversFromProvider, provider as dataProvider } from '../../providers/index.js';
 
 const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex/tokens';
 const cache = new Map();
@@ -46,16 +46,16 @@ export async function getMoversController(req, res, next) {
     }
 
     // 1. Fetch top tokens by volume from Bitquery (identifies movers)
-    const { error, tokens: bitqueryTokens } = await fetchMoversFromBitquery(limit);
+    const { error, tokens: providerTokens } = await fetchMoversFromProvider(limit);
     if (error) throw new Error(error);
 
-    if (bitqueryTokens.length === 0) {
-      const empty = { data: [], meta: { count: 0, source: 'bitquery', fetchedAt: new Date().toISOString() } };
+    if (providerTokens.length === 0) {
+      const empty = { data: [], meta: { count: 0, source: dataProvider, fetchedAt: new Date().toISOString() } };
       return res.json(empty);
     }
 
     // 2. Fetch ALL market data from DexScreener (price, mc, liquidity, priceChange, imageUrl)
-    const mints = bitqueryTokens.map(t => t.mint);
+    const mints = providerTokens.map(t => t.mint);
     const dexMap = new Map();
     try {
       // DexScreener supports batch lookups (max ~30 per request)
@@ -81,9 +81,9 @@ export async function getMoversController(req, res, next) {
       console.error(`[movers] DexScreener fetch failed:`, err.message);
     }
 
-    // 3. Combine: Bitquery (volume, buyers) + DexScreener (price, mc, liq, change, image)
+    // 3. Combine: Provider (volume, buyers) + DexScreener (price, mc, liq, change, image)
     // Only include tokens that have market data from DexScreener
-    const tokens = bitqueryTokens
+    const tokens = providerTokens
       .map(t => {
         const dex = dexMap.get(t.mint) || {};
         return {
@@ -112,7 +112,7 @@ export async function getMoversController(req, res, next) {
       data: tokens,
       meta: {
         count: tokens.length,
-        source: 'bitquery+dexscreener',
+        source: `${dataProvider}+dexscreener`,
         fetchedAt: new Date().toISOString(),
       },
     };

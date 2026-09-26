@@ -1,4 +1,4 @@
-import { fetchTokenOHLC } from '../../providers/bitquery.js';
+import { fetchTokenOHLC, provider as dataProvider } from '../../providers/index.js';
 
 const cache = new Map();
 const CACHE_TTL = 60_000;
@@ -31,7 +31,7 @@ export async function getTokenChartController(req, res, next) {
         mint,
         interval,
         count: result.candles.length,
-        source: 'bitquery',
+        source: dataProvider,
         fetchedAt: new Date().toISOString(),
       },
     };

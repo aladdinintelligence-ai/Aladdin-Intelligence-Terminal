@@ -3,7 +3,8 @@ import {
   fetchAlmostBondedTokens,
   fetchMigratedTokens,
   fetchTrendingTokens,
-} from '../../providers/bitquery.js';
+  provider as dataProvider,
+} from '../../providers/index.js';
 import { Token } from '../../models/token.model.js';
 import axios from 'axios';
 
@@ -249,7 +250,7 @@ async function refreshCache(tab, limit, cacheKey) {
       meta: {
         tab,
         count: tokens.length,
-        source: 'bitquery',
+        source: dataProvider,
         fetchedAt: new Date().toISOString(),
       },
     };
