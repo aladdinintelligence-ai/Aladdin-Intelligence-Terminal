@@ -9,9 +9,10 @@ test("landing separates account entry demo access and real wallet connection",()
   assert.match(entry,/Continue with Google/);assert.match(entry,/Continue with Telegram/);
   assert.match(entry,/Connect Solana Wallet/);assert.match(entry,/entryAsWallet:true/);
 });
-test("Solana provider uses Wallet Standard discovery on Devnet without legacy adapters",()=>{
+test("Solana provider uses Wallet Standard discovery on Mainnet without legacy adapters",()=>{
   const provider=read("app/providers/SolanaProvider.tsx"),pkg=JSON.parse(read("package.json"));
-  assert.match(provider,/WalletProvider wallets=\{\[\]\}/);assert.match(provider,/clusterApiUrl\("devnet"\)/);
+  assert.match(provider,/WalletProvider wallets=\{\[\]\}/);assert.match(provider,/clusterApiUrl\("mainnet-beta"\)/);
+  assert.match(provider,/NEXT_PUBLIC_SOLANA_RPC_URL/);
   assert.ok(pkg.dependencies["@solana/wallet-adapter-react"]);assert.ok(pkg.dependencies["@solana/web3.js"]);
   assert.equal(pkg.dependencies["@solana/wallet-adapter-wallets"],undefined);
 });
@@ -32,16 +33,21 @@ test("visible product terminology is Ask Aladdin and What Changed",()=>{
   const api=read("app/api/page.tsx");assert.match(settings,/Aladdin Intelligence/);assert.match(api,/ASK ALADDIN API/);
 });
 
-test("Devnet transaction requires explicit wallet approval and self-transfers only",()=>{
-  const provider=read("app/providers/SolanaProvider.tsx"),modal=read("app/components/wallet-connect/DevnetTransactionModal.tsx");
-  assert.match(provider,/SystemProgram\.transfer/);assert.match(provider,/fromPubkey:publicKey,toPubkey:publicKey/);
-  assert.match(provider,/sendTransaction\(transaction,connection/);assert.match(provider,/confirmTransaction/);
-  assert.match(modal,/Approve test transaction/);assert.match(modal,/Devnet SOL has no monetary value/);
-  assert.match(modal,/explorer\.solana\.com\/tx/);assert.match(modal,/cluster=devnet/);
+test("no Devnet code, copy or test-transaction affordance remains in the wallet layer",()=>{
+  const provider=read("app/providers/SolanaProvider.tsx"),types=read("app/types/wallet.ts"),notice=read("app/components/wallet-connect/NetworkNotice.tsx"),utils=read("app/utils/wallet.ts");
+  for(const[label,src] of [["provider",provider],["types",types],["notice",notice],["utils",utils]]){
+   assert.doesNotMatch(src,/devnet|Devnet|DEVNET/,`${label} still references Devnet`);
+  }
+  assert.doesNotMatch(provider,/SystemProgram\.transfer|sendTransaction|openDevnetTransaction|devnetTransaction/);
+  assert.doesNotMatch(types,/DevnetTransactionState|devnetTransaction/);
+  assert.match(notice,/Solana Mainnet connected/);
+  assert.match(notice,/real SOL/);
+  assert.match(utils,/MAINNET_LABEL="Solana Mainnet"/);
 });
-test("Devnet transaction state is honest and does not implement swaps or Mainnet",()=>{
-  const provider=read("app/providers/SolanaProvider.tsx"),modal=read("app/components/wallet-connect/DevnetTransactionModal.tsx"),types=read("app/types/wallet.ts");
-  for(const state of ["review","preparing","signing","confirming","confirmed","error"])assert.match(types,new RegExp(`"${state}"`));
-  assert.doesNotMatch(provider,/mainnet-beta|Jupiter|swap/);assert.doesNotMatch(modal,/Buy successful|Swap successful/);
-  assert.match(modal,/does not buy a token or enable Mainnet trading/);
+test("Mainnet notice is honest about real value and network identity",()=>{
+  const notice=read("app/components/wallet-connect/NetworkNotice.tsx"),provider=read("app/providers/SolanaProvider.tsx");
+  assert.match(notice,/MAINNET/);assert.match(notice,/Network &mdash; Solana Mainnet/);
+  assert.doesNotMatch(notice,/no monetary value/);
+  assert.match(provider,/NETWORK_NOTICE_KEY/);
+  assert.match(provider,/network:"mainnet-beta"/);
 });

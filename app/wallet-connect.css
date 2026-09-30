@@ -47,7 +47,7 @@
 }
 .entryModal,
 .walletModal,
-.devnetNotice {
+.networkNotice {
   width: min(440px, 100%);
   border: 1px solid var(--border-strong);
   background: var(--surface-elevated);
@@ -68,14 +68,14 @@
 }
 .entryModal header small,
 .walletModal header small,
-.devnetNotice > small {
+.networkNotice > small {
   color: var(--purple-readable);
   font: 700 8px DM Mono;
   letter-spacing: 1px;
 }
 .entryModal h2,
 .walletModal h2,
-.devnetNotice h2 {
+.networkNotice h2 {
   margin: 4px 0 0;
   font-size: 18px;
 }
@@ -259,32 +259,31 @@
   color: inherit;
   padding: 5px 7px;
 }
-.devnetNotice {
+.networkNotice {
   display: grid;
   justify-items: start;
   padding: 20px;
 }
-.devnetNotice > svg {
+.networkNotice > svg {
   color: var(--purple-readable);
   margin-bottom: 10px;
 }
-.devnetNotice p {
+.networkNotice p {
   color: var(--text-secondary);
   line-height: 1.55;
 }
-.devnetNotice > span {
+.networkNotice > span {
   color: var(--text-metadata);
   font-size: 9px;
 }
-.devnetNotice > div {
+.networkNotice > div {
   margin: 14px 0;
   display: flex;
   align-items: center;
   gap: 7px;
   font: 700 9px DM Mono;
 }
-.devnetNotice i,
-.devnetState i {
+.networkNotice i {
   display: inline-block;
   width: 6px;
   height: 6px;
@@ -292,7 +291,7 @@
   background: var(--warning);
   box-shadow: 0 0 7px color-mix(in srgb, var(--warning) 55%, transparent);
 }
-.devnetNotice > button {
+.networkNotice > button {
   justify-self: stretch;
   height: 38px;
   border: 0;
@@ -390,13 +389,6 @@
   color: var(--text-secondary);
   font-size: 9px;
 }
-.devnetState {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--warning);
-  font: 700 8px DM Mono;
-}
 .mainnetState {
   display: flex;
   align-items: center;
@@ -459,9 +451,10 @@
     padding: 0;
   }
   .entryModal,
+
   .walletModal,
-  .devnetNotice,
-  .devnetTransactionModal {
+
+  .networkNotice {
     width: 100%;
     border-left: 0;
     border-right: 0;
@@ -486,154 +479,6 @@
     animation: none;
   }
 }
-.devnetTransactionModal {
-  width: min(460px, 100%);
-  padding: 16px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-elevated);
-  color: var(--text-primary);
-  box-shadow: 0 28px 90px color-mix(in srgb, #050308 42%, transparent);
-}
-.devnetTransactionModal > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.devnetTransactionModal > header small,
-.devnetTransactionDisclosure {
-  color: var(--text-metadata);
-  font: 700 8px DM Mono;
-  letter-spacing: 0.6px;
-}
-.devnetTransactionModal h2 {
-  margin: 4px 0 0;
-  font-size: 17px;
-}
-.devnetTransactionModal > header button {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border);
-  background: var(--input-bg);
-  color: var(--text-secondary);
-}
-.devnetTransactionModal > header svg {
-  width: 15px;
-}
-.devnetTransactionSummary {
-  display: flex;
-  gap: 10px;
-  margin: 13px 0;
-  padding: 11px;
-  border: 1px solid color-mix(in srgb, var(--brand-purple) 35%, var(--border));
-  background: color-mix(in srgb, var(--brand-purple) 7%, var(--surface));
-}
-.devnetTransactionSummary > svg {
-  flex: none;
-  width: 19px;
-  color: var(--purple-readable);
-}
-.devnetTransactionSummary b {
-  font-size: 11px;
-}
-.devnetTransactionSummary p,
-.devnetTransactionResult p {
-  margin: 4px 0 0;
-  color: var(--text-secondary);
-  font-size: 9px;
-  line-height: 1.45;
-}
-.devnetTransactionModal dl {
-  display: grid;
-  gap: 1px;
-  margin: 0 0 12px;
-}
-.devnetTransactionModal dl div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px;
-  background: var(--surface-raised);
-}
-.devnetTransactionModal dt {
-  color: var(--text-metadata);
-  font-size: 9px;
-}
-.devnetTransactionModal dd {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 9px;
-  font-weight: 650;
-  text-align: right;
-}
-.devnetTransactionProgress {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px;
-  background: var(--selected-surface);
-  color: var(--purple-readable);
-  font-size: 9px;
-}
-.devnetTransactionProgress svg {
-  width: 14px;
-}
-.devnetTransactionResult {
-  padding: 18px 0;
-  text-align: center;
-}
-.devnetTransactionResult > svg {
-  width: 30px;
-  color: var(--positive);
-}
-.devnetTransactionResult h3 {
-  margin: 7px 0 0;
-}
-.devnetExplorerLink {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  color: var(--purple-readable);
-  font-size: 9px;
-  text-decoration: none;
-}
-.devnetExplorerLink svg {
-  width: 12px;
-}
-.devnetTransactionModal > footer {
-  display: flex;
-  gap: 7px;
-  margin-top: 12px;
-}
-.devnetTransactionModal > footer button {
-  min-height: 36px;
-  padding: 0 11px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-secondary);
-  font-weight: 650;
-}
-.devnetTransactionModal > footer .devnetSubmit {
-  flex: 1;
-  border-color: var(--brand-purple);
-  background: var(--brand-purple);
-  color: var(--text-inverse);
-}
-.devnetTransactionModal > footer button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-.devnetTransactionDisclosure {
-  display: block;
-  margin-top: 10px;
-  line-height: 1.5;
-}
 .connectedWalletActions {
   display: flex;
   flex-wrap: wrap;
@@ -645,137 +490,5 @@
   color: var(--purple-readable);
   padding: 7px 9px;
 }
-.devnetBuyModal {
-  width: min(94vw, 480px);
-  max-height: min(780px, calc(100dvh - 32px));
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  background: var(--surface-elevated);
-  color: var(--text-primary);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
-  padding: 20px;
-}
-.devnetBuyModal > header {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  align-items: flex-start;
-}
-.devnetBuyModal > header small {
-  color: var(--brand-purple-text);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.11em;
-}
-.devnetBuyModal > header h2 {
-  margin: 5px 0 0;
-  font-size: 20px;
-}
-.devnetBuyModal > header button {
-  border: 0;
-  background: transparent;
-  color: var(--text-secondary);
-  padding: 7px;
-}
-.devnetBuyAsset {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 18px 0;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface-subtle);
-}
-.devnetBuyAsset > svg {
-  color: var(--brand-purple-text);
-}
-.devnetBuyAsset div {
-  display: grid;
-  gap: 3px;
-}
-.devnetBuyAsset span {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-.devnetBuyModal dl {
-  display: grid;
-  gap: 1px;
-  margin: 0;
-  background: var(--border);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  overflow: hidden;
-}
-.devnetBuyModal dl div {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  background: var(--surface);
-  padding: 11px 13px;
-}
-.devnetBuyModal dt {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-.devnetBuyModal dd {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 750;
-  text-align: right;
-}
-.devnetBuyWarning {
-  margin: 14px 0;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.5;
-}
-.devnetBuyModal > footer {
-  display: flex;
-  gap: 9px;
-  margin-top: 16px;
-}
-.devnetBuyModal > footer button {
-  min-height: 42px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-subtle);
-  color: var(--text-primary);
-  padding: 0 15px;
-  font-weight: 750;
-}
-.devnetBuyModal > footer .devnetSubmit {
-  flex: 1;
-  border-color: transparent;
-  background: var(--brand-purple);
-  color: var(--inverse-text);
-}
-.devnetBuyModal > footer button:disabled {
-  opacity: 0.55;
-}
-.devnetBuyResult {
-  text-align: center;
-  padding: 24px 8px 12px;
-}
-.devnetBuyResult > svg {
-  width: 42px;
-  height: 42px;
-  color: var(--positive);
-}
-.devnetBuyResult h3 {
-  margin: 10px 0 4px;
-}
-.devnetBuyResult p {
-  margin: 0;
-  color: var(--text-secondary);
-}
 @media (max-width: 600px) {
-  .devnetBuyModal {
-    align-self: flex-end;
-    width: 100%;
-    max-height: calc(100dvh - env(safe-area-inset-top) - 16px);
-    border-radius: 22px 22px 0 0;
-    padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
-  }
 }

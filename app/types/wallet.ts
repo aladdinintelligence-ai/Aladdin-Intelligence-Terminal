@@ -6,20 +6,6 @@ export type AladdinAccountMode =
   | "telegram"
   | "wallet"
   | null;
-export type DevnetTransactionStatus =
-  | "closed"
-  | "review"
-  | "preparing"
-  | "signing"
-  | "confirming"
-  | "confirmed"
-  | "error";
-export interface DevnetTransactionState {
-  status: DevnetTransactionStatus;
-  amountSol: number;
-  signature: string | null;
-  error: string | null;
-}
 export interface WalletOption {
   name: WalletName;
   icon: string;
@@ -51,8 +37,4 @@ export interface AladdinWalletState {
   refreshBalance: () => Promise<void>;
   beginAccount: (mode: Exclude<AladdinAccountMode, null>) => void;
   signOut: () => Promise<void>;
-  devnetTransaction: DevnetTransactionState;
-  openDevnetTransaction: () => void;
-  closeDevnetTransaction: () => void;
-  submitDevnetTransaction: () => Promise<void>;
 }

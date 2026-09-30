@@ -7,7 +7,7 @@
         "build": "next build",
         "start": "next start",
         "lint": "eslint",
-        "test": "node --test tests/ask-aladdin.test.mjs tests/workspace.test.mjs tests/theme.test.mjs tests/table-first.test.mjs tests/mobile-workspace-activity.test.mjs tests/latest-corrections.test.mjs tests/adaptive-ask-aladdin.test.mjs tests/launches-refinement.test.mjs tests/wallet-connect.test.mjs tests/devnet-market.test.mjs tests/mobile-trader-ux.test.mjs"
+        "test": "node --test tests/ask-aladdin.test.mjs tests/workspace.test.mjs tests/theme.test.mjs tests/table-first.test.mjs tests/mobile-workspace-activity.test.mjs tests/latest-corrections.test.mjs tests/adaptive-ask-aladdin.test.mjs tests/launches-refinement.test.mjs tests/wallet-connect.test.mjs tests/mobile-trader-ux.test.mjs"
     },
     "dependencies": {
         "@solana/spl-token": "^0.4.15",

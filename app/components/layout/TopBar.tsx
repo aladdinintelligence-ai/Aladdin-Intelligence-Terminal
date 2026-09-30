@@ -57,31 +57,32 @@ function useSolPrice() {
 function useRpcStats(){
   const[latency,setLatency]=useState<number|null>(null);
   const[blockTime,setBlockTime]=useState<string>("--");
-  const rpcUrl=useRef(process.env.NEXT_PUBLIC_SOLANA_RPC_URL||"https://api.mainnet-beta.solana.com");
-  useEffect(()=>{
-    let active=true;
-    const measure=async()=>{
-      try{
-        const start=performance.now();
-        const res=await fetch(rpcUrl.current,{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({jsonrpc:"2.0",id:1,method:"getSlot",params:[]}),
-        });
-        const ms=Math.round(performance.now()-start);
-        if(!active)return;
-        setLatency(ms);
-        const data=await res.json();
-        if(data.result!=null){
-          const now=new Date();
-          setBlockTime(`${now.getHours().toString().padStart(2,"0")}:${now.getMinutes().toString().padStart(2,"0")}:${now.getSeconds().toString().padStart(2,"0")}`);
-        }
-      }catch{}
-    };
-    measure();
-    const i=setInterval(measure,10000);
-    return()=>{active=false;clearInterval(i)};
-  },[]);
+const rpcUrl=useRef(process.env.NEXT_PUBLIC_SOLANA_RPC_URL||"");
+ useEffect(()=>{
+  let active=true;
+  const measure=async()=>{
+   if(!rpcUrl.current)return;
+   try{
+    const start=performance.now();
+    const res=await fetch(rpcUrl.current,{
+     method:"POST",
+     headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({jsonrpc:"2.0",id:1,method:"getSlot",params:[]}),
+    });
+    const ms=Math.round(performance.now()-start);
+    if(!active)return;
+    setLatency(ms);
+    const data=await res.json();
+    if(data.result!=null){
+     const now=new Date();
+     setBlockTime(`${now.getHours().toString().padStart(2,"0")}:${now.getMinutes().toString().padStart(2,"0")}:${now.getSeconds().toString().padStart(2,"0")}`);
+    }
+   }catch{}
+  };
+  measure();
+  const i=setInterval(measure,10000);
+  return()=>{active=false;clearInterval(i)};
+ },[]);
   return{latency,blockTime};
 }
 function useTime(){

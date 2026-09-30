@@ -21,3 +21,17 @@ test("missing evidence is null and explicitly unavailable, never zero",()=>{cons
 test("no visible production component offers Researcher as a profile",()=>{const files=[];function walk(dir){for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isDirectory())walk(full);else if(entry.name.endsWith(".tsx"))files.push(full)}}walk(path.join(root,"app"));const visible=files.map(file=>fs.readFileSync(file,"utf8")).join("\n");assert.doesNotMatch(visible,/\bResearcher\b/)});
 test("compatibility route preserves parameters and visible branding is Ask Aladdin",()=>{const redirect=fs.readFileSync(path.join(root,"app/ask-ifa/page.tsx"),"utf8"),sidebar=fs.readFileSync(path.join(root,"app/components/layout/Sidebar.tsx"),"utf8"),dock=fs.readFileSync(path.join(root,"app/components/layout/MobileDock.tsx"),"utf8");assert.match(redirect,/Object\.entries\(params\)/);assert.match(redirect,/query\.append/);assert.match(redirect,/\/ask-aladdin/);assert.match(sidebar,/Ask Aladdin/);assert.match(dock,/Ask Aladdin/)});
 test("global shell does not mount a repeated simulated-data banner",()=>{const shell=fs.readFileSync(path.join(root,"app/components/layout/AppShell.tsx"),"utf8");assert.doesNotMatch(shell,/SyntheticDisclosure/) });
+test("chat auto-scrolls the newest message into view and honours scroll pinning",()=>{
+  const ws=fs.readFileSync(path.join(root,"app/components/ask-aladdin/AskWorkspace.tsx"),"utf8");
+  const css=fs.readFileSync(path.join(root,"app/components/ask-aladdin/ask-workspace.css"),"utf8");
+  assert.match(ws,/useLayoutEffect/,"a layout effect must run scroll before paint");
+  assert.match(ws,/endRef=useRef<HTMLDivElement>\(null\)/);
+  assert.match(ws,/ref=\{endRef\}/,"the scroll sentinel must be attached to the DOM");
+  assert.match(ws,/className="askScrollEnd"/);
+  assert.match(ws,/end\.scrollIntoView\(\{block:"end"/,"must scroll the sentinel, not guess scrollHeight");
+  assert.doesNotMatch(ws,/\.scrollTo\(\{top:/,"must not scroll a single guessed container");
+  assert.match(ws,/pinnedRef\.current/,"must track whether the user scrolled away from the bottom");
+  assert.match(ws,/pinnedRef\.current=true;setRun\(activeRun\)/,"a new question must re-pin to the bottom");
+  assert.match(ws,/prefers-reduced-motion/);
+  assert.match(css,/\.askScrollEnd\{[^}]*scroll-margin-bottom/,"sentinel needs scroll margin to clear the sticky composer");
+});

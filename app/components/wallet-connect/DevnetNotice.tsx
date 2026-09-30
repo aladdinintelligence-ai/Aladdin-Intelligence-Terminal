@@ -1,3 +1,0 @@
-"use client";
-import {FlaskConical} from "lucide-react";
-export function DevnetNotice({open,reason,onContinue}:{open:boolean;reason:string;onContinue:()=>void}){if(!open)return null;return <div className="walletModalBackdrop"><section className="devnetNotice" role="dialog" aria-modal="true" aria-labelledby="devnet-title"><FlaskConical/><small>TRADING SANDBOX</small><h2 id="devnet-title">Solana Devnet connected</h2><p>Devnet SOL has no monetary value. Trading and transaction features in this environment are for testing only.</p>{reason?<span>Pending context: {reason}</span>:null}<div><i/>Network · Solana Devnet</div><button type="button" onClick={onContinue}>Continue</button></section></div>}
