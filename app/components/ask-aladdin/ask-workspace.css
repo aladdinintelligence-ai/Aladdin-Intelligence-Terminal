@@ -37,3 +37,18 @@ html[data-resolved-theme="light"] .topbar,html[data-resolved-theme="light"] .tic
 .longAnalysisProgress{margin:12px 0;border:1px solid var(--border);border-radius:14px;background:var(--surface-subtle);overflow:hidden}.longAnalysisSummary{display:grid;grid-template-columns:20px 1fr 18px;align-items:center;gap:10px;width:100%;padding:11px 12px;border:0;background:transparent;color:var(--text-primary);text-align:left}.longAnalysisSummary>span:nth-child(2){display:grid;gap:3px}.longAnalysisSummary b{font-size:11px;font-weight:650}.longAnalysisSummary small{color:var(--text-muted);font-size:9px}.longAnalysisSummary>svg{width:16px;color:var(--icon);transition:transform var(--motion-fast)}.longAnalysisSummary[aria-expanded="true"]>svg{transform:rotate(180deg)}.longAnalysisSteps{display:grid;gap:8px;margin:0;padding:2px 12px 12px 44px;list-style:none}.longAnalysisSteps li{display:grid;grid-template-columns:20px 1fr;align-items:start;gap:7px;color:var(--text-muted);font-size:10px;line-height:1.45}.longAnalysisSteps li>span:first-child{display:grid;place-items:center;width:18px;height:18px;border:1px solid var(--border-strong);border-radius:50%;font-size:8px}.longAnalysisSteps li.complete{color:var(--text-secondary)}.longAnalysisSteps li.complete>span:first-child{border-color:var(--positive);color:var(--positive)}.longAnalysisSteps li.active{color:var(--text-primary)}.longAnalysisSteps li.active>span:first-child{border-color:var(--brand-purple);color:var(--purple-readable);animation:deepStagePulse 1s ease-in-out infinite}.longAnalysisSteps li.error{color:var(--negative)}.longAnalysisError{margin:0;padding:0 12px 12px 44px;color:var(--negative);font-size:10px;line-height:1.5}@keyframes deepStagePulse{50%{box-shadow:0 0 0 3px color-mix(in srgb,var(--brand-purple) 16%,transparent)}}
 @media(max-width:760px){.longAnalysisProgress{margin-inline:4px}.longAnalysisSummary{min-height:48px}.longAnalysisSteps{padding-left:42px;padding-bottom:14px}}
 @media(prefers-reduced-motion:reduce){.longAnalysisSummary>svg,.longAnalysisSteps li.active>span:first-child{animation:none;transition:none}}
+/* Chat layout: user question on the right, Aladdin answer on the left. */
+.conversationTurns{display:flex;flex-direction:column;gap:18px;padding:4px 0 8px}
+.conversationTurns:empty{display:none}
+.conversationTurn{display:flex;flex-direction:column;gap:12px;border:0;padding:0}
+.questionBlock{display:flex;justify-content:flex-end;padding:0}
+.questionBlock h2{max-width:min(680px,86%);margin:0;padding:10px 15px;border:1px solid var(--border);border-radius:16px 16px 4px 16px;background:var(--selected-surface);color:var(--text-primary);font-size:14px;font-weight:550;line-height:1.5;letter-spacing:normal;overflow-wrap:anywhere;word-break:break-word}
+.conversationTurn .plainAnswer,.conversationTurn .creatorRefusal{align-self:flex-start;width:100%;max-width:100%}
+.conversationTurn.pending .questionBlock h2{opacity:.75}
+.conversationTurn.error .questionBlock h2{border-color:var(--negative)}
+.conversationTurns .investigationActivity,.conversationTurns .longAnalysisProgress{margin:0}
+.conversationTurns .longAnalysisProgress{max-width:100%}
+.answerPeriod{margin:0 0 8px;color:var(--text-muted);font:8px DM Mono}
+@media(max-width:760px){.questionBlock h2{max-width:92%}}
+.structuredQueryAnswer.noAnswer h2{color:var(--text-secondary);font-weight:500}
+.structuredQueryAnswer.noAnswer .profileSummary{margin-top:8px;color:var(--text-muted)}

@@ -6,6 +6,7 @@ import {executeSyntheticQuery} from "./execution/synthetic-executor";
 import {interpretDataset} from "./interpretation/profile-interpreter";
 import {formatAnalyticalAnswer} from "./formatting/answer-formatter";
 import {generateFollowUps} from "./follow-ups/generate-follow-ups";
+import {askSseFetch} from "@/app/lib/api";
 
 type ActivityListener=(events:ActivityEvent[])=>void;
 const pause=(duration=420)=>new Promise(resolve=>setTimeout(resolve,duration));
@@ -19,7 +20,7 @@ const deepStages:Array<{operation:QueryOperation;message:string}>=[
 ];
 function conversationalAnswer(request:AnalysisRequest,intent:ReturnType<typeof resolveAskIntent>):AskAladdinAnswer{return{mode:request.mode,intent:intent.intent,has_data:false,direct_answer:intent.reply||"What would you like to investigate?",query_definition:request.question,result_columns:[],result_rows:[],result_count:0,displayed_count:0,sort_definition:"",active_filters:[],analysis_period:request.period,currency_display:null,profile_summary:"",generated_follow_ups:[],full_query_link:"/queries",export_options:[],data_details:{evidenceSnapshotId:"",evidenceHash:"",coverage:"",limitations:[]},availability:"unavailable",synthetic:true,evidenceSnapshotId:"",evidenceHash:""}}
 
-export async function runAskAladdinAnalysis(request:AnalysisRequest,onActivity:ActivityListener=()=>{}):Promise<AnalyticalRunResult>{
+async function runLocalAnalysis(request:AnalysisRequest,onActivity:ActivityListener):Promise<AnalyticalRunResult>{
  const resolved=resolveAskIntent(request),isData=["data_query","follow_up"].includes(resolved.intent),deep=request.depth==="deep"&&isData,events:ActivityEvent[]=deep?deepStages.map((stage,index)=>({id:`${stage.operation}-${index}`,message:stage.message,operation:stage.operation,status:"pending",timestamp:new Date().toISOString()})):[];
  if(deep)onActivity([...events]);
  let step=0;
@@ -34,3 +35,32 @@ export async function runAskAladdinAnalysis(request:AnalysisRequest,onActivity:A
  await operate("formatting","Preparing the final result",()=>{answer=formatAnalyticalAnswer(request.question,request.mode,plan,dataset,profileSummary,generateFollowUps(request.question,plan.entityId||request.currentEntityId),request.currentEntityId)});
  answer.intent=resolved.intent;answer.has_data=true;return{answer,queryPlan:plan,dataset,activityEvents:events};
 }
+
+async function runBackendAnalysis(request:AnalysisRequest,onActivity:ActivityListener,signal?:AbortSignal):Promise<AnalyticalRunResult>{
+ const {frames,complete}=await askSseFetch("/api/ask",{
+  question:request.question,mode:request.mode,period:request.period,
+  depth:request.depth||"quick",hasPriorContext:request.hasPriorContext||false,
+  currentEntityId:request.currentEntityId||null,
+ },signal);
+ for(const frame of frames){
+  if(frame.type==="activity"&&frame.events)onActivity(frame.events);
+ }
+ if(!complete||!complete.result)throw new Error("Analysis did not complete");
+ return complete.result;
+}
+
+export async function runAskAladdinAnalysis(request:AnalysisRequest,onActivity:ActivityListener=()=>{},signal?:AbortSignal):Promise<AnalyticalRunResult>{
+ try{
+  return await runBackendAnalysis(request,onActivity,signal);
+ }catch(error){
+  const message=error instanceof Error?error.message:String(error);
+  const networkIssue=/Failed to fetch|load failed|NetworkError|The Internet connection|ERR_|signal/i.test(message);
+  if(networkIssue||/401|403/.test(message)){
+   console.warn(`[ask-aladdin] Backend unavailable (${message}). Falling back to local synthetic pipeline.`);
+   return runLocalAnalysis(request,onActivity);
+  }
+  throw error;
+ }
+}
+
+export type{ActivityListener};
