@@ -23,6 +23,7 @@ const userSchema = new mongoose.Schema({
     enum: ['Trader', 'Analyst', 'Token Creator'],
     default: 'Trader',
   },
+  timezone: { type: String, default: 'Europe/London' },
   wallet: { type: userWalletSchema },
 }, { timestamps: true });
 

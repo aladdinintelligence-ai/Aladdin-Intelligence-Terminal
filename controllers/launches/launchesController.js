@@ -10,8 +10,27 @@ import axios from 'axios';
 
 const CACHE_TTL = 120_000;
 const STALE_TTL = 300_000;
+const QUOTA_COOLDOWN_MS = 5 * 60_000;
 const responseCache = new Map();
 const inflightRequests = new Map();
+let quotaCooldownUntil = 0;
+
+function isQuotaError(err) {
+  const message = err?.message || '';
+  return message.includes('402') || /quota|points limit|rate limit/i.test(message);
+}
+
+function scheduleRefresh(tab, limit, cacheKey) {
+  if (inflightRequests.has(cacheKey)) return inflightRequests.get(cacheKey);
+  const inflight = refreshCache(tab, limit, cacheKey);
+  inflightRequests.set(cacheKey, inflight);
+  inflight
+    .catch((err) => {
+      console.error(`[launches] background refresh failed for ${tab}:`, err.message);
+    })
+    .finally(() => inflightRequests.delete(cacheKey));
+  return inflight;
+}
 
 const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex/tokens';
 const imageCache = new Map();
@@ -206,22 +225,11 @@ export async function getLaunchesController(req, res, next) {
 
     if (age < STALE_TTL && cached) {
       res.json(cached.response);
-
-      let inflight = inflightRequests.get(cacheKey);
-      if (!inflight) {
-        inflight = refreshCache(tab, limit, cacheKey);
-        inflightRequests.set(cacheKey, inflight);
-        inflight.finally(() => inflightRequests.delete(cacheKey));
-      }
+      scheduleRefresh(tab, limit, cacheKey);
       return;
     }
 
-    let inflight = inflightRequests.get(cacheKey);
-    if (!inflight) {
-      inflight = refreshCache(tab, limit, cacheKey);
-      inflightRequests.set(cacheKey, inflight);
-      inflight.finally(() => inflightRequests.delete(cacheKey));
-    }
+    const inflight = scheduleRefresh(tab, limit, cacheKey);
 
     const response = await inflight;
     return res.json(response);
@@ -231,15 +239,32 @@ export async function getLaunchesController(req, res, next) {
       console.log(`[launches] Serving stale cache for ${req.query.tab} after error`);
       return res.json(cached.response);
     }
+    if (isQuotaError(exc)) {
+      return res.status(503).json({
+        error: 'provider_quota',
+        message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
+      });
+    }
     return next(exc);
   }
 }
 
 async function refreshCache(tab, limit, cacheKey) {
+  if (Date.now() < quotaCooldownUntil) {
+    console.log(`[launches] Skipping ${tab} refresh while provider quota is on cooldown`);
+    const stale = responseCache.get(cacheKey);
+    if (stale) return stale.response;
+    const err = new Error('Provider quota exceeded (cooldown)');
+    err.status = 402;
+    throw err;
+  }
   try {
     const result = await fetchWithRetry(tab, limit);
 
-    if (result.error) throw new Error(result.error);
+    if (result.error) {
+      if (isQuotaError(result.error)) quotaCooldownUntil = Date.now() + QUOTA_COOLDOWN_MS;
+      throw new Error(result.error);
+    }
 
     const mapper = mappers[tab];
     const mapped = mapper(result.tokens);
@@ -258,6 +283,7 @@ async function refreshCache(tab, limit, cacheKey) {
     responseCache.set(cacheKey, { response, timestamp: Date.now() });
     return response;
   } catch (err) {
+    if (isQuotaError(err)) quotaCooldownUntil = Date.now() + QUOTA_COOLDOWN_MS;
     console.error(`[launches] Failed to fetch ${tab}:`, err.message);
     const stale = responseCache.get(cacheKey);
     if (stale) return stale.response;

@@ -5,6 +5,11 @@ const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex/tokens';
 const cache = new Map();
 const CACHE_TTL = 120_000;
 
+function isQuotaError(err) {
+  const message = err?.message || '';
+  return message.includes('402') || /quota|points limit|rate limit/i.test(message);
+}
+
 function generateColor(mint) {
   const colors = [
     '#f1a8bf', '#55c7ea', '#8b7cf6', '#43c98b', '#d872f2',
@@ -120,6 +125,12 @@ export async function getMoversController(req, res, next) {
     cache.set(cacheKey, { data: response, ts: Date.now() });
     return res.json(response);
   } catch (exc) {
+    if (isQuotaError(exc)) {
+      return res.status(503).json({
+        error: 'provider_quota',
+        message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
+      });
+    }
     return next(exc);
   }
 }

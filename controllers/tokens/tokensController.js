@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { Token, TokenLifecycle, TokenFeature, Trade, WalletTokenPosition, WalletTokenFeature, WalletBehaviourIdentity, WalletRecentBehaviourState, WalletTokenRole, WalletTokenEpisode } from '../../models/index.js';
+import { Token, TokenHolder, TokenLifecycle, TokenFeature, Trade, WalletTokenPosition, WalletTokenFeature, WalletBehaviourIdentity, WalletRecentBehaviourState, WalletTokenRole, WalletTokenEpisode } from '../../models/index.js';
 import { syncToken } from '../../services/syncToken.js';
 import { resolveDisplayIdentity, getRecentBehaviour } from '../../services/identityResolver.js';
 import { materializeDisplayCohorts } from '../../services/cohortService.js';
