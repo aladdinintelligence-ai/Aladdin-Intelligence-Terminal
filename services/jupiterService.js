@@ -3,7 +3,11 @@ import { User } from '../models/user.model.js';
 import { decryptAES } from './authService.js';
 
 const JUPITER_API = process.env.JUPITER_API_URL || 'https://api.jup.ag/swap/v1';
-const SOLANA_RPC = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+const ALCHEMY_SOLANA_RPC = process.env.ALCHEMY_API_KEY
+  ? `https://solana-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`
+  : '';
+const SOLANA_RPC =
+  process.env.SOLANA_RPC_URL || ALCHEMY_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
 const connection = new Connection(SOLANA_RPC, 'confirmed');
 
