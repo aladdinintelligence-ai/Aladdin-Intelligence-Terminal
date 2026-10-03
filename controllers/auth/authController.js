@@ -1,5 +1,5 @@
 import * as authService from '../../services/authService.js';
-import { authCookieOptions } from '../../configs/index.js';
+import { authCookieOptions, authCookieClearOptions, authCookieDiagnostics } from '../../configs/index.js';
 
 function userResponse(user) {
   return {
@@ -221,6 +221,33 @@ export async function getWallet(req, res, next) {
 // ── Logout ──────────────────────────────────────────────────────────────────
 
 export function logout(_req, res) {
-  res.clearCookie('token', authCookieOptions);
+  res.clearCookie('token', authCookieClearOptions);
   res.json({ message: 'Logged out' });
+}
+
+// ── Diagnostics ─────────────────────────────────────────────────────────────
+
+/**
+ * Public on purpose: used to verify the cookie attributes the browser is being
+ * handed. Reports no secrets.
+ */
+export function authConfig(_req, res) {
+  res.json({
+    cookie: authCookieDiagnostics,
+    problems: cookieProblems(authCookieDiagnostics),
+  });
+}
+
+function cookieProblems(diag) {
+  const out = [];
+  if (diag.sameSite === 'none' && !diag.secure) {
+    out.push('SameSite=None requires Secure; the browser will drop this cookie.');
+  }
+  if (diag.sameSite === 'lax') {
+    out.push('SameSite=Lax is not sent on cross-site fetch/XHR. If the frontend is on a different site than the API, set COOKIE_SAMESITE=none and COOKIE_SECURE=true.');
+  }
+  if (!diag.domain) {
+    out.push('No COOKIE_DOMAIN set: the cookie is host-only. That is correct when the API and frontend are on different sites, and wrong when the API is a subdomain of the frontend site.');
+  }
+  return out;
 }

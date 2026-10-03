@@ -2,18 +2,32 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const whitelist = [
+const defaultWhitelist = [
   "https://aladdin-intelligence.vercel.app",
+  "https://aladdin-intelligence-ai.vercel.app",
   process.env.FRONTEND_LOCAL,
-];
+  process.env.FRONTEND_PROD,
+].filter(Boolean);
 
-export function corsHandler(origin, callback) {  
+// CORS_ORIGINS allows extra browser origins (comma separated). Without it a
+// production frontend on any other domain is rejected by corsHandler, and the
+// browser then drops the auth cookie even when Set-Cookie itself was valid.
+const configured = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const whitelist = [...new Set([...defaultWhitelist, ...configured])];
+
+export function corsHandler(origin, callback) {
   if (!origin) {
     return callback(null, true);
   }
   if (whitelist.includes(origin)) {
     return callback(null, true);
-  } else {
-    return callback(new Error("Not allowed by CORS"));
   }
+  console.warn(`[cors] rejected origin: ${origin}`);
+  return callback(new Error("Not allowed by CORS"));
 }
+
+export { whitelist as corsWhitelist };
