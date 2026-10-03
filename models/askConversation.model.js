@@ -40,6 +40,4 @@ const askConversationSchema = new mongoose.Schema({
   sessions: { type: [sessionSchema], default: [] },
 }, { timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' } });
 
-askConversationSchema.index({ userId: 1 });
-
 export const AskConversation = mongoose.model('AskConversation', askConversationSchema);

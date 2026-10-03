@@ -16,7 +16,11 @@ const cache = new Map();
 function cached(key, fallback) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.value;
-  return fallback();
+  const pending = fallback();
+  if (pending && typeof pending.then === 'function') {
+    pending.then((value) => cache.set(key, { value, ts: Date.now() })).catch(() => {});
+  }
+  return pending;
 }
 
 function nullOr(value) {
@@ -184,6 +188,36 @@ export async function resolveMintFromQuestion(question) {
   const direct = words.map((w) => w.replace(/[^\w]/g, '')).filter((w) => MINT_RE.test(w));
   if (direct.length) return direct[0];
   return null;
+}
+
+// A base58 address matches MINT_RE whether it is an SPL mint or a wallet, so
+// the regex alone cannot tell them apart. An address is treated as a token
+// when it has a DEX pool on the provider or a record in the token collection.
+// This sits on the ask critical path, so the answer is cached and any lookup
+// failure falls back to "not a token" rather than failing the request.
+export async function isTokenMint(address) {
+  if (!MINT_RE.test(address)) return false;
+  return cached(`ismint:${address}`, async () => {
+    try {
+      if (await Token.exists({ _id: address })) return true;
+
+      const query = `{
+        Solana {
+          DEXPools(
+            limit: { count: 1 }
+            where: { Pool: { Market: { BaseCurrency: { MintAddress: { is: "${address}" } } } } }
+          ) {
+            Pool { Market { BaseCurrency { MintAddress } } }
+          }
+        }
+      }`;
+      const { data } = await providerGraphql(query, 'isTokenMint');
+      return Boolean(data?.Solana?.DEXPools?.length);
+    } catch (err) {
+      console.error(`[isTokenMint] lookup failed for ${address.slice(0, 8)}: ${err.message}`);
+      return false;
+    }
+  });
 }
 
 export async function lookUpToken(mint) {

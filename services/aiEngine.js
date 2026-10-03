@@ -9,6 +9,7 @@ import {
   getMigrationSpecialists,
   getProfitableWallets,
   resolveTokenBySymbol,
+  isTokenMint,
   tokenColumns,
   walletColumns,
 } from './aiTools.js';
@@ -88,11 +89,14 @@ async function resolveEntity(request) {
   const directMint = await resolveMintFromQuestion(request.question);
   if (directMint) return { mint: directMint, kind: 'mint' };
 
-  const contextMint = request.currentEntityId && MINT_RE.test(request.currentEntityId) ? request.currentEntityId : null;
-  if (contextMint) return { mint: contextMint, kind: 'mint' };
+  // currentEntityId carries the profile wallet as often as it carries a token
+  // mint, and both are base58 so MINT_RE matches either. Confirm it is a real
+  // token before treating it as the subject of the question.
+  const context = request.currentEntityId || null;
+  if (context && await isTokenMint(context)) return { mint: context, kind: 'mint' };
 
   const symbol = (request.question.match(/\$[A-Za-z0-9]{2,10}\b/) || [])[0]
-    || (request.currentEntityId && !MINT_RE.test(request.currentEntityId) ? request.currentEntityId : null);
+    || (context && !MINT_RE.test(context) ? context : null);
   if (symbol) {
     const token = await resolveTokenBySymbol(symbol);
     if (token) return { mint: token._id, symbol: token.symbol || symbol.replace(/^\$/, ''), kind: 'symbol' };
@@ -107,7 +111,6 @@ function planKindFromQuestion(question, entity, currentEntityId) {
   if (/woke up|today|while i was away|overnight|briefing/i.test(q)) return 'briefing';
   if (entity) return 'consultation';
   if (/above \$1m|over \$1m|no matches/i.test(q)) return 'tokens';
-  if (currentEntityId) return 'consultation';
   return 'tokens';
 }
 

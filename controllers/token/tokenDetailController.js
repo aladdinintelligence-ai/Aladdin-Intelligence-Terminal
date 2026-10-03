@@ -26,7 +26,7 @@ async function fetchTrades(mint, limit = 50) {
           PriceInUSD
           Account { Owner }
         }
-        Transaction { Hash }
+        Transaction { Signature }
       }
     }
   }`;
@@ -39,7 +39,7 @@ async function fetchTrades(mint, limit = 50) {
     amount: parseFloat(t.Trade?.Amount) || 0,
     priceUsd: parseFloat(t.Trade?.PriceInUSD) || 0,
     wallet: t.Trade?.Account?.Owner || '',
-    signature: t.Transaction?.Hash || '',
+    signature: t.Transaction?.Signature || '',
   }));
 }
 
@@ -60,7 +60,7 @@ async function fetchParticipants(mint, limit = 50) {
           PriceInUSD
           Account { Owner }
         }
-        Transaction { Hash }
+        Transaction { Signature }
       }
     }
   }`;
@@ -97,15 +97,19 @@ async function fetchParticipants(mint, limit = 50) {
 async function fetchHolders(mint, limit = 50) {
   const query = `{
     Solana {
-      TokenHolders(
-        limit: { count: 500 }
+      BalanceUpdates(
+        limitBy: { by: [BalanceUpdate_Currency_MintAddress, BalanceUpdate_Account_Address], count: 1 }
+        limit: { count: 5000 }
+        orderBy: { descending: Block_Slot }
         where: {
-          Token: { Address: { is: "${mint}" } }
+          BalanceUpdate: { Currency: { MintAddress: { is: "${mint}" } } }
+          Transaction: { Result: { Success: true } }
         }
       ) {
-        Token { Address }
-        Holder { Address }
-        LatestBalance
+        BalanceUpdate {
+          Account { Address }
+          PostBalance
+        }
       }
     }
   }`;
@@ -113,9 +117,9 @@ async function fetchHolders(mint, limit = 50) {
   if (error) return [];
 
   const balances = new Map();
-  for (const row of data?.Solana?.TokenHolders || []) {
-    const addr = row.Holder?.Address;
-    const bal = parseFloat(row.LatestBalance) || 0;
+  for (const row of data?.Solana?.BalanceUpdates || []) {
+    const addr = row.BalanceUpdate?.Account?.Address;
+    const bal = parseFloat(row.BalanceUpdate?.PostBalance) || 0;
     if (addr && bal > 0) balances.set(addr, bal);
   }
 
@@ -139,12 +143,12 @@ async function fetchFirstBuyers(mint, limit = 100) {
         limit: { count: ${Math.min(limit * 3, 500)} }
         orderBy: { ascending: Block_Time }
         where: {
-          Trade: { Currency: { MintAddress: { is: "${mint}" } }, Side: { Type: { is: "buy" } }, Amount: { gt: "0" } }
+          Trade: { Currency: { MintAddress: { is: "${mint}" } }, Side: { Type: { is: buy } }, Amount: { gt: "0" } }
         }
       ) {
         Block { Time }
         Trade { Amount PriceInUSD Account { Owner } }
-        Transaction { Hash }
+        Transaction { Signature }
       }
     }
   }`;
@@ -183,8 +187,8 @@ async function fetchTokenStats(mint) {
       ) {
         TradeCount24h: count
         Volume24h: sum(of: Trade_AmountInUSD)
-        Buys24h: sum(of: Trade_AmountInUSD, if: { Trade: { Side: { Type: { is: "buy" } } } })
-        Sells24h: sum(of: Trade_AmountInUSD, if: { Trade: { Side: { Type: { is: "sell" } } } })
+        Buys24h: sum(of: Trade_AmountInUSD, if: { Trade: { Side: { Type: { is: buy } } } })
+        Sells24h: sum(of: Trade_AmountInUSD, if: { Trade: { Side: { Type: { is: sell } } } })
       }
       trades1h: DEXTradeByTokens(
         where: {
@@ -195,27 +199,32 @@ async function fetchTokenStats(mint) {
         TradeCount1h: count
         Volume1h: sum(of: Trade_AmountInUSD)
       }
-      holders: TokenHolders(
+      holders: BalanceUpdates(
+        limitBy: { by: [BalanceUpdate_Currency_MintAddress, BalanceUpdate_Account_Address], count: 1 }
         limit: { count: 5000 }
+        orderBy: { descending: Block_Slot }
         where: {
-          Token: { Address: { is: "${mint}" } }
+          BalanceUpdate: { Currency: { MintAddress: { is: "${mint}" } } }
+          Transaction: { Result: { Success: true } }
         }
       ) {
-        Holder { Address }
-        LatestBalance
+        BalanceUpdate {
+          Account { Address }
+          PostBalance
+        }
       }
     }
   }`;
   const { error, data } = await gql(query, ':stats');
   if (error) return null;
 
-  const t24 = data?.Solana?.trades24h;
-  const t1h = data?.Solana?.trades1h;
+  const t24 = data?.Solana?.trades24h?.[0];
+  const t1h = data?.Solana?.trades1h?.[0];
 
   const balances = new Map();
   for (const row of data?.Solana?.holders || []) {
-    const addr = row.Holder?.Address;
-    const bal = parseFloat(row.LatestBalance) || 0;
+    const addr = row.BalanceUpdate?.Account?.Address;
+    const bal = parseFloat(row.BalanceUpdate?.PostBalance) || 0;
     if (addr && bal > 0) balances.set(addr, bal);
   }
   const holderCount = balances.size;

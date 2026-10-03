@@ -690,7 +690,7 @@ async function fetchBuyerCountsForMints(mints, hours, label = '') {
         limit: { count: ${rowLimit} }
         orderBy: { descending: Block_Time }
         where: {
-          Trade: { Currency: { MintAddress: { in: [${gqlStr(mints)}] } }, Side: { Type: { is: "buy" } }, Amount: { gt: "0" } }
+          Trade: { Currency: { MintAddress: { in: [${gqlStr(mints)}] } }, Side: { Type: { is: buy } }, Amount: { gt: "0" } }
           Transaction: { Result: { Success: true } }
           Block: { Time: { since: "${since}" } }
         }
