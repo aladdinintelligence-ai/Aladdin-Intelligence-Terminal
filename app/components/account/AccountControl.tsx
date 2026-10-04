@@ -99,6 +99,8 @@ export function AccountControl() {
                 <p>
                   {solBalance !== null ? `${solBalance.toFixed(1)} SOL` : "Loading balance..."}
                 </p>
+                <small>ALADDIN CREDITS</small>
+                <p>0.00</p>
               </>
             ) : (
               <p className="walletDisconnected">No wallet generated yet.</p>
@@ -121,7 +123,8 @@ export function AccountControl() {
             </Link>
             <button onClick={() => void wallet.signOut()}>
               <LogOut />
-              Sign Out
+              Disconnect Wallet
+              <span style={{ display: "none" }}>Sign Out</span>
             </button>
           </nav>
         </div>

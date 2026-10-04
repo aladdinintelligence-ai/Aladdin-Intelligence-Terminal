@@ -11,10 +11,38 @@ test("landing separates account entry demo access and real wallet connection",()
 });
 test("Solana provider uses Wallet Standard discovery on Mainnet without legacy adapters",()=>{
   const provider=read("app/providers/SolanaProvider.tsx"),pkg=JSON.parse(read("package.json"));
-  assert.match(provider,/WalletProvider wallets=\{\[\]\}/);assert.match(provider,/clusterApiUrl\("mainnet-beta"\)/);
+  assert.match(provider,/WalletProvider wallets=\{\[\]\}/);
   assert.match(provider,/NEXT_PUBLIC_SOLANA_RPC_URL/);
+  // No silent fallback to the public Solana endpoint.
+  assert.doesNotMatch(provider,/clusterApiUrl/);
   assert.ok(pkg.dependencies["@solana/wallet-adapter-react"]);assert.ok(pkg.dependencies["@solana/web3.js"]);
   assert.equal(pkg.dependencies["@solana/wallet-adapter-wallets"],undefined);
+});
+test("balance tracking subscribes over WS with an HTTP polling safety net",()=>{
+  const provider=read("app/providers/SolanaProvider.tsx");
+  assert.match(provider,/onAccountChange/);
+  assert.match(provider,/removeAccountChangeListener/);
+  assert.match(provider,/getBalance/);
+  assert.match(provider,/setInterval/);
+  assert.match(provider,/wsEndpoint/);
+  // Wallet-adapter errors are logged with their non-enumerable code/message.
+  assert.match(provider,/Object\.getOwnPropertyNames/);
+});
+test("entry keeps the visitor on the current page instead of forcing /launches",()=>{
+  const entry=read("app/components/landing/EntryModal.tsx");
+  assert.match(entry,/usePathname/);
+  assert.match(entry,/pathname!=="\/"\?pathname:"\/launches"/);
+  // No hardcoded post-auth destination anywhere in the modal.
+  assert.doesNotMatch(entry,/router\.push\("\/launches"\)/);
+  assert.doesNotMatch(entry,/afterConnectPath:"\/launches"/);
+});
+test("landing Launch Aladdin recognises an existing session",()=>{
+  const page=read("app/page.tsx");
+  assert.match(page,/useAuth/);
+  // Signed-in users are sent into the product; the button waits for the session
+  // check so a click cannot flash the sign-in modal at a signed-in user.
+  assert.match(page,/if\(user\)\{router\.push/);
+  assert.match(page,/if\(loading\)return/);
 });
 test("real wallet state replaces mocked address and balance",()=>{
   const account=read("app/components/account/AccountControl.tsx"),settings=read("app/settings/page.tsx");

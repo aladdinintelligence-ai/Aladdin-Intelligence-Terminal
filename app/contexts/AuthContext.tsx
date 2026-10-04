@@ -24,14 +24,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch<AuthUser>("/api/auth/me")
-      .then((profile) => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const attempt = async (retries = 2) => {
+      try {
+        const profile = await apiFetch<AuthUser>("/api/auth/me", {
+          signal: controller.signal,
+        });
+        if (cancelled) return;
         setUser(profile);
-      })
-      .catch(() => {
-        setUser(null);
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      } catch (error) {
+        // Only sign out on explicit auth failure; retry on transient errors.
+        const status = (error as any)?.status;
+        const message = (error as Error)?.message || "";
+        if (status === 401 || message.includes("Authentication required") || message.includes("Invalid or expired token")) {
+          if (!cancelled) {
+            setUser(null);
+            setLoading(false);
+          }
+          return;
+        }
+        if (retries > 0) {
+          await new Promise((r) => setTimeout(r, 250));
+          if (!cancelled) {
+            return attempt(retries - 1);
+          }
+          return;
+        }
+        if (!cancelled) {
+          setUser(null);
+          setLoading(false);
+        }
+      }
+    };
+    attempt();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, []);
 
   const setAuth = useCallback((newUser: AuthUser) => {

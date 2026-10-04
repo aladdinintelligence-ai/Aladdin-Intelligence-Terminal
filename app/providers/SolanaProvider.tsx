@@ -3,7 +3,7 @@ import {useCallback,useEffect,useMemo,useState,type ReactNode} from "react";
 import {useRouter} from "next/navigation";
 import {ConnectionProvider,WalletProvider,useConnection,useWallet} from "@solana/wallet-adapter-react";
 import {WalletReadyState,type WalletError,type WalletName} from "@solana/wallet-adapter-base";
-import {clusterApiUrl,LAMPORTS_PER_SOL} from "@solana/web3.js";
+import {LAMPORTS_PER_SOL} from "@solana/web3.js";
 import {AladdinWalletContext} from "@/app/hooks/useAladdinWallet";
 import {useAuth} from "@/app/hooks/useAuth";
 import {fetchNonce,phantomLogin} from "@/app/lib/auth/phantom";
@@ -14,11 +14,30 @@ import {NetworkNotice} from "@/app/components/wallet-connect/NetworkNotice";
 
 const ACCOUNT_KEY="aladdin-account-mode-v1";
 const NETWORK_NOTICE_KEY="aladdin-network-notice-seen-v1";
-const endpoint=process.env.NEXT_PUBLIC_SOLANA_RPC_URL||clusterApiUrl("mainnet-beta");
+const RPC_URL=process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
+const WS_URL=process.env.NEXT_PUBLIC_SOLANA_WS_URL;
+const BALANCE_POLL_MS=12000;
+// Module scope keeps this object's identity stable, so ConnectionProvider's
+// useMemo([endpoint, config]) stops rebuilding a Connection (and a socket) on
+// every render.
+const CONNECTION_CONFIG={commitment:"confirmed" as const,wsEndpoint:WS_URL||undefined};
+const BASE58_RE=/^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+function isValidBase58(value:string){return BASE58_RE.test(value)}
+
+function toErrorDetail(cause:unknown){
+  if(cause instanceof Error)return{name:cause.name,message:cause.message,code:(cause as {code?:unknown}).code,own:JSON.stringify(cause,Object.getOwnPropertyNames(cause))};
+  return{own:JSON.stringify(cause,Object.getOwnPropertyNames(cause as object))};
+}
+
+if(typeof window!=="undefined"){
+  console.log("[rpc] NEXT_PUBLIC_SOLANA_RPC_URL =",RPC_URL,"| NEXT_PUBLIC_SOLANA_WS_URL =",WS_URL);
+  if(!RPC_URL)console.error("[rpc] NEXT_PUBLIC_SOLANA_RPC_URL is undefined. Define it in the frontend root .env.local and restart the dev server.");
+}
 
 export function SolanaProvider({children}:{children:ReactNode}){
-  const onError=useCallback((error:WalletError)=>console.warn("Solana wallet connection error:",error.message),[]);
-  return <ConnectionProvider endpoint={endpoint}><WalletProvider wallets={[]} autoConnect onError={onError}><WalletStateBridge>{children}</WalletStateBridge></WalletProvider></ConnectionProvider>
+  const onError=useCallback((error:WalletError)=>console.warn("Solana wallet connection error:",toErrorDetail(error)),[]);
+  return <ConnectionProvider endpoint={RPC_URL??""} config={CONNECTION_CONFIG}><WalletProvider wallets={[]} autoConnect onError={onError}><WalletStateBridge>{children}</WalletStateBridge></WalletProvider></ConnectionProvider>
 }
 function WalletStateBridge({children}:{children:ReactNode}){
   const router=useRouter();const {connection}=useConnection();const {wallet,wallets,publicKey,connected,connecting,select,connect,disconnect}=useWallet();
@@ -29,8 +48,31 @@ function WalletStateBridge({children}:{children:ReactNode}){
   const [phantomAuthPending,setPhantomAuthPending]=useState(false);
   useEffect(()=>{const stored=localStorage.getItem(ACCOUNT_KEY);if(stored==="demo"||stored==="google"||stored==="telegram"||stored==="wallet")setAccountMode(stored)},[]);
   const beginAccount=useCallback((mode:Exclude<AladdinAccountMode,null>)=>{localStorage.setItem(ACCOUNT_KEY,mode);setAccountMode(mode)},[]);
-  const refreshBalance=useCallback(async()=>{if(!publicKey){setBalance(null);setBalanceStatus("idle");return}setBalanceStatus("loading");try{setBalance((await connection.getBalance(publicKey,"confirmed"))/LAMPORTS_PER_SOL);setBalanceStatus("ready")}catch{setBalance(null);setBalanceStatus("unavailable")}},[connection,publicKey]);
-  useEffect(()=>{void refreshBalance();if(!publicKey)return;const subscription=connection.onAccountChange(publicKey,info=>{setBalance(info.lamports/LAMPORTS_PER_SOL);setBalanceStatus("ready")},"confirmed");return()=>{void connection.removeAccountChangeListener(subscription)}},[connection,publicKey,refreshBalance]);
+  const refreshBalance=useCallback(async()=>{if(!publicKey){setBalance(null);setBalanceStatus("idle");return}setBalanceStatus("loading");try{setBalance((await connection.getBalance(publicKey,"confirmed"))/LAMPORTS_PER_SOL);setBalanceStatus("ready")}catch(cause){console.error("[rpc] refreshBalance failed",toErrorDetail(cause));setBalance(null);setBalanceStatus("unavailable")}},[connection,publicKey]);
+  // Helius supports the Solana pubsub methods, so we subscribe for real-time
+  // balance updates. A slow HTTP poll runs alongside as a safety net: if the
+  // subscription silently dies, the displayed balance still converges.
+  useEffect(()=>{
+    if(!publicKey){setBalance(null);setBalanceStatus("idle");return}
+    const address=publicKey.toBase58();
+    if(!isValidBase58(address)){console.warn("[rpc] refusing to subscribe invalid pubkey:",JSON.stringify(address));setBalance(null);setBalanceStatus("unavailable");return}
+    let cancelled=false;
+    const applyLamports=(lamports:number)=>{if(cancelled)return;setBalance(lamports/LAMPORTS_PER_SOL);setBalanceStatus("ready")};
+    const poll=async()=>{
+      try{applyLamports(await connection.getBalance(publicKey,"confirmed"))}
+      catch(cause){if(cancelled)return;console.error("[rpc] balance poll failed",toErrorDetail(cause));setBalance(null);setBalanceStatus("unavailable")}
+    };
+    void poll();
+    let subscription:number|undefined;
+    try{subscription=connection.onAccountChange(publicKey,info=>applyLamports(info.lamports),"confirmed")}
+    catch(cause){console.error("[rpc] onAccountChange subscribe failed, falling back to polling only:",toErrorDetail(cause))}
+    const timer=setInterval(()=>{void poll()},BALANCE_POLL_MS);
+    return()=>{
+      cancelled=true;
+      clearInterval(timer);
+      if(subscription!==undefined){try{void connection.removeAccountChangeListener(subscription)}catch(cause){console.warn("[rpc] removeAccountChangeListener failed",toErrorDetail(cause))}}
+    };
+  },[connection,publicKey]);
   useEffect(()=>{if(!pendingWallet||wallet?.adapter.name!==pendingWallet)return;let active=true;void connect().then(()=>{if(active)setError(null)}).catch(cause=>{if(active)setError(walletErrorMessage(cause))}).finally(()=>{if(active)setPendingWallet(null)});return()=>{active=false}},[connect,pendingWallet,wallet?.adapter.name]);
   useEffect(()=>{if(!connected||!publicKey||!modal)return;
     const performPhantomAuth=async()=>{

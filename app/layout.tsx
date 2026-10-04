@@ -36,8 +36,7 @@ export default function RootLayout({
       data-resolved-theme="dark"
       suppressHydrationWarning
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
+      <head><script dangerouslySetInnerHTML={{ __html: themeBoot }} />
       </head>
       <body>
         <ThemeProvider>

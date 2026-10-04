@@ -18,7 +18,11 @@ export async function apiFetch<T = unknown>(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error || `Request failed with status ${response.status}`);
+    const error: Error & { status?: number } = new Error(
+      data.error || `Request failed with status ${response.status}`,
+    );
+    error.status = response.status;
+    throw error;
   }
 
   return data as T;
@@ -54,13 +58,16 @@ export async function askSseFetch<T extends AskSseFrame = AskSseFrame>(
 
   if (!response.ok || !response.body) {
     let msg = `Request failed with status ${response.status}`;
+    let status = response.status;
     try {
       const data = await response.json();
       if (data.error) msg = data.error;
     } catch {
       /* ignore parse failure */
     }
-    throw new Error(msg);
+    const error: Error & { status?: number } = new Error(msg);
+    error.status = status;
+    throw error;
   }
 
   const reader = response.body.getReader();

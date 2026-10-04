@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import {Connection,PublicKey,LAMPORTS_PER_SOL} from '@solana/web3.js';
 
-const key=process.env.ALCHEMY_API_KEY;
-const connection=new Connection(`https://solana-mainnet.g.alchemy.com/v2/${key}`,'confirmed');
+const rpc=process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
+if(!rpc){console.error('NEXT_PUBLIC_SOLANA_RPC_URL is not set. Load aladdin/.env.local first.');process.exit(1)}
+const connection=new Connection(rpc,{commitment:'confirmed',wsEndpoint:process.env.NEXT_PUBLIC_SOLANA_WS_URL||undefined});
 const manifest=JSON.parse(fs.readFileSync('app/data/devnet-market-manifest.json','utf8'));
 const mints=Object.values(manifest).map(v=>v.mint);
 

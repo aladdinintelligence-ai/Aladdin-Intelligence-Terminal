@@ -9,6 +9,7 @@ import {LaunchTokenCard} from "@/app/components/launches/LaunchTokenCard";
 import {LaunchFeedRow} from "@/app/components/launches/LaunchFeedRow";
 import {useAuth} from "@/app/hooks/useAuth";
 import {useLaunches} from "@/app/hooks/useLaunches";
+import {useAladdinWallet} from "@/app/hooks/useAladdinWallet";
 import {JupiterSwapModal} from "@/app/components/jupiter-swap/JupiterSwapModal";
 import {EntryModal} from "@/app/components/landing/EntryModal";
 import {Skeleton} from "@/app/components/ui/Skeleton";
@@ -22,6 +23,8 @@ interface StoredLaunchView{tab:Tab;filters:LaunchFilterState;sort:LaunchSortKey;
 
 export function LaunchesExperience(){
   const{user}=useAuth();
+  const{connected,openWalletModal}=useAladdinWallet();
+  const wallet={connected};
   const [tab,setTab]=useState<Tab>("New");
   const [filters,setFilters]=useState<LaunchFilterState>(defaultLaunchFilters);
   const [sort,setSort]=useState<LaunchSortKey>("newest");
@@ -44,6 +47,10 @@ export function LaunchesExperience(){
 
   const onBuy=(token:LaunchToken)=>{
     setSelectedBuy(token);
+    if(!wallet.connected){
+      openWalletModal({ reason: "Connect a Solana wallet to resume this token after connection." });
+      return;
+    }
     if(!user){
       setShowAuthGate(true);
       return;
