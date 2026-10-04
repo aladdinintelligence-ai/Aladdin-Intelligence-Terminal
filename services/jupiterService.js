@@ -3,13 +3,24 @@ import { User } from '../models/user.model.js';
 import { decryptAES } from './authService.js';
 
 const JUPITER_API = process.env.JUPITER_API_URL || 'https://api.jup.ag/swap/v1';
-const ALCHEMY_SOLANA_RPC = process.env.ALCHEMY_API_KEY
-  ? `https://solana-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`
+const HELIUS_API_KEY = process.env.HELIUS_API_KEY || '';
+// Helius is the only Solana RPC backend for this service. No Alchemy and no
+// public-endpoint fallback: a silent fallback would hide a missing key.
+const HELIUS_SOLANA_RPC = HELIUS_API_KEY
+  ? `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`
   : '';
-const SOLANA_RPC =
-  process.env.SOLANA_RPC_URL || ALCHEMY_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+const SOLANA_RPC = process.env.SOLANA_RPC_URL || HELIUS_SOLANA_RPC;
+const SOLANA_WS = process.env.SOLANA_WS_URL || '';
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
-const connection = new Connection(SOLANA_RPC, 'confirmed');
+if (!SOLANA_RPC) {
+  throw new Error(
+    'Solana RPC is not configured. Set HELIUS_API_KEY (or SOLANA_RPC_URL) before starting the server.',
+  );
+}
+const connection = new Connection(SOLANA_RPC, {
+  commitment: 'confirmed',
+  ...(SOLANA_WS ? { wsEndpoint: SOLANA_WS } : {}),
+});
 
 // ── Known stablecoin / common token mints ───────────────────────────────────
 const KNOWN_MINTS = {

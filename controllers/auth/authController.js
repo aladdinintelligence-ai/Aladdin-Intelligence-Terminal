@@ -234,6 +234,16 @@ export function logout(_req, res) {
 export function authConfig(_req, res) {
   res.json({
     cookie: authCookieDiagnostics,
+    jwt: {
+      rotationIntervalSec: Math.max(
+        60,
+        Number(process.env.JWT_ROTATION_INTERVAL_SEC) || 900,
+      ),
+      hardCapSec: Math.max(
+        (Number(process.env.JWT_ROTATION_INTERVAL_SEC) || 900) * 2,
+        Number(process.env.JWT_HARD_CAP_SEC) || 3600,
+      ),
+    },
     problems: cookieProblems(authCookieDiagnostics),
   });
 }
@@ -248,6 +258,9 @@ function cookieProblems(diag) {
   }
   if (!diag.domain) {
     out.push('No COOKIE_DOMAIN set: the cookie is host-only. That is correct when the API and frontend are on different sites, and wrong when the API is a subdomain of the frontend site.');
+  }
+  if (typeof diag.sessionDays === 'number' && diag.sessionDays < 1) {
+    out.push('SESSION_DAYS is below 1 day; sessions will expire very quickly.');
   }
   return out;
 }

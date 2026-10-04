@@ -2,7 +2,9 @@ import 'dotenv/config';
 import { connection, SOL_MINT } from '../services/jupiterService.js';
 import { PublicKey } from '@solana/web3.js';
 
-console.log('rpc endpoint:', connection.rpcEndpoint.replace(/alch_\w+/, 'alch_***'));
+// Helius keys are UUIDs, so mask that shape rather than an Alchemy key prefix.
+console.log('rpc endpoint:', connection.rpcEndpoint.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, '***'));
+console.log('ws endpoint :', process.env.SOLANA_WS_URL ? 'configured' : 'not configured');
 
 const slot = await connection.getSlot();
 console.log('getSlot ->', slot);
@@ -12,4 +14,4 @@ console.log('getBalance(SOL mint) ->', lamports, 'lamports =', (lamports / 1e9).
 
 const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 console.log('getLatestBlockhash ->', blockhash.slice(0, 16) + '...', 'validHeight', lastValidBlockHeight);
-console.log('\nALCHEMY RPC OK');
+console.log('\nHELIUS RPC OK');

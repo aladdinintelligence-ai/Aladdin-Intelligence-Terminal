@@ -1,4 +1,6 @@
 import jwt from 'jsonwebtoken';
+import { authCookieOptions } from '../configs/services/cookieOptions.js';
+import { generateJWT, shouldRefreshJWT } from '../services/authService.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'aladdin-dev-secret-change-in-production';
 
@@ -31,12 +33,27 @@ export function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
+  let payload;
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    req.user = { userId: payload.userId };
-    next();
+    payload = jwt.verify(token, JWT_SECRET);
   } catch (err) {
     console.warn(`[auth] 401 ${req.method} ${req.originalUrl} — token present but rejected: ${err.message}`);
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
+
+  req.user = { userId: payload.userId };
+
+  // Sliding session: if the token is still valid but getting old, mint a fresh
+  // token and bump the cookie expiry forward. This keeps active users logged
+  // in while enforcing a hard cap via the cookie's maxAge.
+  try {
+    if (shouldRefreshJWT(token)) {
+      const newToken = generateJWT(payload.userId, { maxAgeMs: authCookieOptions.maxAge });
+      res.cookie('token', newToken, authCookieOptions);
+    }
+  } catch (refreshErr) {
+    console.warn(`[auth] failed to refresh token on ${req.method} ${req.originalUrl}: ${refreshErr.message}`);
+  }
+
+  next();
 }

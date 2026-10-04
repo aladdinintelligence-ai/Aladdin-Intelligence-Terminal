@@ -16,14 +16,57 @@ const AUTH_NONCE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
-// ── JWT ──────────────────────────────────────────────────────────────────────
+// JWT rotation: re-mint on every hit with a short access token, but never
+// mint a token that can live longer than the browser-held cookie.
+const JWT_ROTATION_INTERVAL_SEC = Math.max(
+  60,
+  Number(process.env.JWT_ROTATION_INTERVAL_SEC) || 900,
+);
+const JWT_HARD_CAP_SEC = Math.max(
+  JWT_ROTATION_INTERVAL_SEC * 2,
+  Number(process.env.JWT_HARD_CAP_SEC) || 3600,
+);
 
-export function generateJWT(userId) {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+// ── JWT (sliding session) ─────────────────────────────────────────────────────
+
+function daysToMs(days) {
+  return days * 24 * 60 * 60 * 1000;
+}
+
+export function generateJWT(userId, { maxAgeMs } = {}) {
+  const fallbackMaxAge = daysToMs(
+    Number(process.env.SESSION_DAYS) > 0 ? Number(process.env.SESSION_DAYS) : 10,
+  );
+  const cookieCapMs = typeof maxAgeMs === 'number' && maxAgeMs > 0 ? maxAgeMs : fallbackMaxAge;
+
+  const capSec = Math.min(JWT_HARD_CAP_SEC, Math.floor(cookieCapMs / 1000));
+  const effectiveSec = Math.max(JWT_ROTATION_INTERVAL_SEC, capSec);
+  const finalSec = Math.min(effectiveSec, capSec);
+
+  if (finalSec <= 0) {
+    return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '5m' });
+  }
+
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: finalSec });
 }
 
 export function verifyJWT(token) {
   return jwt.verify(token, JWT_SECRET);
+}
+
+export function shouldRefreshJWT(token) {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true });
+    if (!decoded || typeof decoded.exp !== 'number') return false;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const ageSec = nowSec - decoded.iat;
+    if (ageSec < JWT_ROTATION_INTERVAL_SEC) return false;
+    const timeToExpSec = decoded.exp - nowSec;
+    if (timeToExpSec <= 0) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ── Nonce (anti-replay for Phantom signatures) ───────────────────────────────

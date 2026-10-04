@@ -14,6 +14,19 @@ const truthy = (v) => v === "true" || v === "1";
  */
 const cookieDomain = process.env.COOKIE_DOMAIN?.trim() || undefined;
 
+/**
+ * How long a sign-in lasts.
+ *
+ * This cookie's maxAge is the single source of truth for session length. The
+ * JWT inside it is deliberately much shorter-lived and is re-minted on every
+ * authenticated request (see middleware/auth.js), so an active user is never
+ * signed out while an idle one is logged out once the browser drops the
+ * cookie. Never set the JWT lifetime above this value: a token that outlives
+ * its cookie only produces guaranteed 401s for the remainder of its life.
+ */
+const sessionDays = Number(process.env.SESSION_DAYS) > 0 ? Number(process.env.SESSION_DAYS) : 10;
+export const sessionMaxAgeMs = sessionDays * 24 * 60 * 60 * 1000;
+
 // Cross-site cookies require SameSite=None together with Secure, and browsers
 // drop the cookie entirely over plain HTTP. Default to that in production, but
 // allow explicit overrides for hosts that do not set NODE_ENV=production.
@@ -31,7 +44,7 @@ const shared = {
 
 export const authCookieOptions = {
   ...shared,
-  maxAge: 24 * 60 * 60 * 1000,
+  maxAge: sessionMaxAgeMs,
 };
 
 // clearCookie must be given the same attributes used when setting the cookie,
@@ -44,4 +57,6 @@ export const authCookieDiagnostics = {
   sameSite,
   domain: cookieDomain ?? null,
   hostOnly: !cookieDomain,
+  sessionDays,
+  maxAgeMs: sessionMaxAgeMs,
 };
