@@ -56,8 +56,7 @@ export async function runAskAladdinAnalysis(request:AnalysisRequest,onActivity:A
   const message=error instanceof Error?error.message:String(error);
   const networkIssue=/Failed to fetch|load failed|NetworkError|The Internet connection|ERR_|signal/i.test(message);
   if(networkIssue||/401|403/.test(message)){
-   console.warn(`[ask-aladdin] Backend unavailable (${message}). Falling back to local synthetic pipeline.`);
-   return runLocalAnalysis(request,onActivity);
+   throw error;
   }
   throw error;
  }

@@ -71,7 +71,8 @@ function hueOf(addr:string):number{
 }
 
 function tradeKey(t:Trade,index:number):string{
-  return t.signature||`${t.time}|${t.side}|${t.amount}|${t.priceUsd}|${t.wallet}|${index}`;
+  const sig = t.signature || '';
+  return `${sig}|${t.time || ''}|${t.side || ''}|${t.amount ?? ''}|${t.priceUsd ?? ''}|${t.wallet || ''}|${index}`;
 }
 
 export function LiveTradesLog({mint,symbol}:{mint:string;symbol?:string}){
