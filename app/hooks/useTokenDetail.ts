@@ -9,6 +9,8 @@ export interface Trade {
   amount: number;
   priceUsd: number;
   signature: string;
+  /** Trader address. The backend already returns this for the trades tab. */
+  wallet: string;
 }
 
 export interface Participant {
@@ -52,13 +54,14 @@ export interface TokenStats {
 
 type TabData = Trade[] | Participant[] | Holder[] | FirstBuyer[] | TokenStats | null;
 
-export function useTokenDetail(mint: string | null, tab: string, limit = 50) {
+export function useTokenDetail(mint: string | null, tab: string | null, limit = 50, refetchInterval = 0) {
   const [data, setData] = useState<TabData>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!mint) { setLoading(false); return; }
+    // A null tab means the view fetches its own data (e.g. LiveTradesLog).
+    if (!mint || !tab) { setLoading(false); return; }
 
     let cancelled = false;
     setLoading(true);
@@ -86,6 +89,33 @@ export function useTokenDetail(mint: string | null, tab: string, limit = 50) {
 
     return () => { cancelled = true; };
   }, [mint, tab, limit]);
+
+  // Optional background refresh so live views pick up new on-chain rows.
+  // Deliberately does not touch `loading`/`error`, otherwise every poll would
+  // flip the table back to its skeleton and defeat the point.
+  useEffect(() => {
+    if (!mint || !tab || refetchInterval <= 0) return;
+
+    let cancelled = false;
+    const controller = new AbortController();
+    const tick = async () => {
+      const tabParam = tab.toLowerCase().replace(/\s+/g, '-');
+      try {
+        const res = await fetch(
+          `${API_URL}/api/token-detail/${mint}?tab=${tabParam}&limit=${limit}`,
+          { signal: controller.signal },
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled) setData(json.data);
+      } catch {
+        // Transient poll failure: keep showing the last good snapshot.
+      }
+    };
+
+    const timer = setInterval(() => { void tick(); }, refetchInterval);
+    return () => { cancelled = true; controller.abort(); clearInterval(timer); };
+  }, [mint, tab, limit, refetchInterval]);
 
   return { data, loading, error };
 }

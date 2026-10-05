@@ -1,0 +1,319 @@
+/* Live transactions log — modelled on the DEX-screener tape: near-black rows,
+   hairline dividers, tabular numerals, coloured side pill, trader + tx links.
+   Every selector is namespaced under .tl so nothing leaks into other tables. */
+
+.tl {
+  --tl-buy: #16c784;
+  --tl-sell: #ea3943;
+  --tl-ink: #e8e9ed;
+  --tl-dim: #7c8087;
+  --tl-line: rgba(255, 255, 255, .07);
+  --tl-hi: rgba(255, 255, 255, .035);
+  position: relative;
+  border: 1px solid var(--border-subtle, var(--border));
+  border-radius: 10px;
+  background: #0b0c0e;
+  color: var(--tl-ink);
+  overflow: hidden;
+}
+
+/* ── toolbar ────────────────────────────────────────────────────────────── */
+.tlBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--tl-line);
+  background: #101114;
+}
+
+.tlSeg {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .05);
+}
+.tlSeg button {
+  border: 0;
+  background: transparent;
+  color: var(--tl-dim);
+  padding: 4px 10px;
+  border-radius: 5px;
+  font: 600 10px/1.4 Inter, Arial, sans-serif;
+  letter-spacing: .3px;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+.tlSeg button:hover {
+  color: var(--tl-ink);
+}
+.tlSeg button[aria-pressed="true"] {
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+}
+
+.tlLive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 9px/1 Inter, Arial, sans-serif;
+  letter-spacing: .7px;
+  text-transform: uppercase;
+  color: var(--tl-buy);
+}
+.tlLiveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: tlPulse 2s ease-out infinite;
+}
+.tlLive[data-stale="true"] {
+  color: var(--tl-dim);
+}
+.tlLive[data-stale="true"] .tlLiveDot {
+  animation: none;
+}
+.tlSpacer {
+  flex: 1;
+}
+.tlStat {
+  font: 500 10px/1 var(--font-mono, "DM Mono", ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--tl-dim);
+  white-space: nowrap;
+}
+.tlStat b {
+  font-weight: 700;
+  color: var(--tl-ink);
+}
+
+/* ── grid ───────────────────────────────────────────────────────────────── */
+.tlScroll {
+  overflow: auto;
+  max-height: 480px;
+  scrollbar-width: thin;
+}
+.tlGrid {
+  --cols: 7;
+  min-width: 800px;
+}
+
+.tlHead,
+.tlRow {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+}
+
+.tlHead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 32px;
+  background: #0f1013;
+  border-bottom: 1px solid var(--tl-line);
+  font: 700 9px/1 Inter, Arial, sans-serif;
+  letter-spacing: .7px;
+  text-transform: uppercase;
+  color: var(--tl-dim);
+}
+/* Dex-screener right-aligns every numeric column. */
+.tlHead > .tlNum {
+  text-align: right;
+}
+
+/* ── rows ───────────────────────────────────────────────────────────────── */
+.tlRow {
+  position: relative;
+  min-height: 46px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--tl-line);
+  font: 400 11.5px/1.25 var(--font-mono, "DM Mono", ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  transition: background-color 120ms ease;
+}
+.tlRow:last-child {
+  border-bottom: 0;
+}
+.tlRow:hover,
+.tlRow:focus-within {
+  background: var(--tl-hi);
+}
+.tlRow > * {
+  min-width: 0;
+}
+.tlRow > .tlNum {
+  text-align: right;
+}
+
+/* Date: relative age over the absolute timestamp, like the reference. */
+.tlDate {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tlAge {
+  color: var(--tl-ink);
+  font-weight: 600;
+}
+.tlAbs {
+  color: var(--tl-dim);
+  font-size: 9.5px;
+}
+
+.tlSide {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font: 700 9.5px/1 Inter, Arial, sans-serif;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: var(--tl-side);
+  background: color-mix(in srgb, var(--tl-side) 15%, transparent);
+}
+.tlUsd {
+  color: #fff;
+  font-weight: 650;
+}
+.tlAmt {
+  color: var(--tl-ink);
+}
+.tlPrice {
+  color: var(--tl-dim);
+}
+
+/* Trader: deterministic hue from the address, so a wallet keeps its colour. */
+.tlTrader {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--tl-ink);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+.tlTrader:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+.tlAvatar {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font: 700 8px/1 Inter, Arial, sans-serif;
+  color: #08090a;
+  background: hsl(var(--hue) 62% 62%);
+}
+.tlAddr {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tlExt {
+  color: var(--tl-dim);
+  display: inline-flex;
+  transition: color 120ms ease;
+}
+.tlExt:hover {
+  color: #fff;
+}
+.tlDim {
+  color: var(--tl-dim);
+}
+
+/* ── new-row motion ─────────────────────────────────────────────────────── */
+/* Only rows absent from the previous snapshot are marked, so settled rows
+   keep their DOM node and never re-animate. */
+.tlRow[data-new="true"] {
+  animation: tlRowIn 240ms cubic-bezier(.22, 1, .36, 1) both;
+}
+.tlRow[data-new="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--tl-side, #fff) 14%, transparent);
+  animation: tlFlash 1200ms ease-out both;
+}
+
+@keyframes tlRowIn {
+  from {
+    opacity: 0;
+    transform: translateY(-7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tlFlash {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes tlPulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 65%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* ── states ─────────────────────────────────────────────────────────────── */
+.tlEmpty {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 40px 16px;
+  text-align: center;
+}
+.tlEmpty b {
+  font: 650 12px/1 Inter, Arial, sans-serif;
+  color: var(--tl-ink);
+}
+.tlEmpty span {
+  font: 400 10.5px/1.5 Inter, Arial, sans-serif;
+  color: var(--tl-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tlRow[data-new="true"] {
+    animation: none;
+  }
+  .tlRow[data-new="true"]::after {
+    animation: none;
+    opacity: 0;
+  }
+  .tlLiveDot {
+    animation: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .tlBar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .tlScroll {
+    max-height: 400px;
+  }
+}

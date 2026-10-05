@@ -44,6 +44,49 @@ test("landing Launch Aladdin recognises an existing session",()=>{
   assert.match(page,/if\(user\)\{router\.push/);
   assert.match(page,/if\(loading\)return/);
 });
+test("evidence tables size their grid to the panel's real column count",()=>{
+  const css=read("app/globals.css"),panel=read("app/components/token/TerminalInvestigation.tsx");
+  // The old hardcoded repeat(5, ...) pushed the 6th Trades cell onto a second row.
+  assert.match(css,/repeat\(var\(--cols, 5\)/);
+  assert.doesNotMatch(css,/repeat\(5, minmax\(125px/);
+  // Every panel declares its own width.
+  for(const n of [2,4,6])assert.match(panel,new RegExp(`cols\\(${n}\\)`));
+});
+test("transactions tab mirrors the DEX-screener tape and animates new fills",()=>{
+  const log=read("app/components/token/LiveTradesLog.tsx");
+  const css=read("app/components/token/live-trades.css");
+  const panel=read("app/components/token/TerminalInvestigation.tsx");
+  const types=read("app/hooks/useTokenDetail.ts");
+
+  // Tab is named Transactions, and the backend tab key stays "trades".
+  assert.match(panel,/TABS=\["Transactions"/);
+  assert.doesNotMatch(panel,/TABS=\["Trades"/);
+
+  // Date | Type | USD | <SYMBOL> | Price | Trader | Txn
+  assert.match(log,/>Date<\/span><span>Type<\/span>/);
+  assert.match(log,/>USD<\/span>/);
+  assert.match(log,/symbol\|\|"Tokens"/);
+  assert.match(log,/>Price<\/span>/);
+  assert.match(log,/>Trader<\/span>/);
+  assert.match(log,/solscan\.io\/tx\//);
+  assert.match(log,/solscan\.io\/account\//);
+  // Relative age stacked over the absolute timestamp.
+  assert.match(log,/tlAge[\s\S]*tlAbs/);
+  // Side filter segment.
+  assert.match(log,/aria-pressed=\{side===value\}/);
+
+  assert.match(log,/useTokenDetail\(mint,"trades",50,REFRESH_MS\)/);
+  assert.match(log,/data-new=/);
+  assert.match(log,/tlNum/);
+  // The Trader column needs the wallet the backend already returns.
+  assert.match(types,/wallet: string;/);
+
+  assert.match(css,/font-variant-numeric: tabular-nums/);
+  assert.match(css,/@keyframes tlRowIn/);
+  assert.match(css,/@keyframes tlFlash/);
+  const reduced=css.slice(css.indexOf("prefers-reduced-motion"));
+  assert.match(reduced,/animation: none/);
+});
 test("real wallet state replaces mocked address and balance",()=>{
   const account=read("app/components/account/AccountControl.tsx"),settings=read("app/settings/page.tsx");
   assert.doesNotMatch(account,/14\.82 SOL|7xK\.\.\.91Pd/);assert.match(account,/WalletBalance/);

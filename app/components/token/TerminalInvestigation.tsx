@@ -1,15 +1,20 @@
 "use client";
-import {useState} from "react";
+import {useState,type CSSProperties} from "react";
 import Link from "next/link";
-import {useTokenDetail,type Trade,type Participant,type Holder,type FirstBuyer,type TokenStats} from "@/app/hooks/useTokenDetail";
+import {useTokenDetail,type Participant,type Holder,type FirstBuyer,type TokenStats} from "@/app/hooks/useTokenDetail";
 import {Skeleton} from "@/app/components/ui/Skeleton";
 import {Badge} from "@/app/components/ui/Badge";
+import {LiveTradesLog} from "@/app/components/token/LiveTradesLog";
 import "@/app/components/ui/skeleton.css";
 
-const TABS=["Trades","Participants","Most Profitable","Largest Holders","First 100","Holders","Live State","Historical Match"] as const;
+// Each evidence panel declares its own column count so the header and the body
+// rows share one grid definition instead of the old hardcoded 5.
+function cols(n:number):CSSProperties{return{"--cols":n} as CSSProperties}
+
+const TABS=["Transactions","Participants","Most Profitable","Largest Holders","First 100","Holders","Live State","Historical Match"] as const;
 type Tab=(typeof TABS)[number];
 const DESCRIPTIONS:Record<Tab,string>={
-  Trades:"Recent on-chain buy/sell transactions for this token.",
+  Transactions:"Recent on-chain buy/sell transactions for this token.",
   Participants:"Wallets actively trading this token, ranked by volume.",
   "Most Profitable":"Top wallets by estimated profit from this token.",
   "Largest Holders":"Wallets holding the largest share of supply.",
@@ -41,14 +46,14 @@ function fmtTime(iso:string):string{
   return`${d.getHours().toString().padStart(2,"0")}:${d.getMinutes().toString().padStart(2,"0")}:${d.getSeconds().toString().padStart(2,"0")}`;
 }
 
-function TableSkeleton({rows=5,cols=5}:{rows?:number;cols?:number}){
-  return <div className="terminalEvidenceTable">
+function TableSkeleton({rows=5,cols:colCount=5}:{rows?:number;cols?:number}){
+  return <div className="terminalEvidenceTable" style={cols(colCount)}>
     <div className="terminalEvidenceHead" role="row">
-      {Array.from({length:cols},(_,i)=><span key={i}><Skeleton className="skeleton-text-sm"/></span>)}
+      {Array.from({length:colCount},(_,i)=><span key={i}><Skeleton className="skeleton-text-sm"/></span>)}
     </div>
     {Array.from({length:rows},(_,r)=>(
       <div className="terminalEvidenceRow" role="row" key={r}>
-        {Array.from({length:cols},(_,c)=>(
+        {Array.from({length:colCount},(_,c)=>(
           <span key={c}><Skeleton className="skeleton-text" count={1}/></span>
         ))}
       </div>
@@ -56,26 +61,8 @@ function TableSkeleton({rows=5,cols=5}:{rows?:number;cols?:number}){
   </div>;
 }
 
-function TradesPanel({data,loading,error}:{data:Trade[]|null;loading:boolean;error:string|null}){
-  if(loading)return <TableSkeleton rows={8} cols={6}/>;
-  if(error)return <div className="launchEmpty"><b>Error</b><span>{error}</span></div>;
-  if(!data?.length)return <div className="launchEmpty"><b>No trades found</b></div>;
-
-  return <div className="terminalEvidenceTable">
-    <div className="terminalEvidenceHead" role="row">
-      <span>TIME</span><span>SIDE</span><span>AMOUNT</span><span>PRICE</span><span>VALUE</span><span>SIGNATURE</span>
-    </div>
-    {data.map((t,i)=>(
-      <div className="terminalEvidenceRow" role="row" key={i}>
-        <span>{fmtTime(t.time)}</span>
-        <span><Badge color={t.side==="BUY"?"#22c55e":"#ef4444"}>{t.side}</Badge></span>
-        <span>{t.amount!=null&&!Number.isNaN(t.amount)?t.amount.toFixed(4):"—"}</span>
-        <span>{fmtPrice(t.priceUsd)}</span>
-        <span>{fmtPrice(t.amount!=null&&t.priceUsd!=null?t.amount*t.priceUsd:null)}</span>
-        <span>{t.signature?<a href={`https://solscan.io/tx/${t.signature}`} target="_blank" rel="noreferrer" style={{color:"var(--purple-readable)"}}>{t.signature.slice(0,8)}...</a>:"—"}</span>
-      </div>
-    ))}
-  </div>;
+function TransactionsPanel({mint,symbol}:{mint:string;symbol:string}){
+  return <LiveTradesLog mint={mint} symbol={symbol}/>;
 }
 
 function ParticipantsPanel({data,loading,error}:{data:Participant[]|null;loading:boolean;error:string|null}){
@@ -83,7 +70,7 @@ function ParticipantsPanel({data,loading,error}:{data:Participant[]|null;loading
   if(error)return <div className="launchEmpty"><b>Error</b><span>{error}</span></div>;
   if(!data?.length)return <div className="launchEmpty"><b>No participants found</b></div>;
 
-  return <div className="terminalEvidenceTable">
+  return <div className="terminalEvidenceTable" style={cols(6)}>
     <div className="terminalEvidenceHead" role="row">
       <span>WALLET</span><span>TRADES</span><span>BUYS</span><span>SELLS</span><span>VOLUME</span><span>BEHAVIOUR</span>
     </div>
@@ -105,7 +92,7 @@ function HoldersPanel({data,loading,error}:{data:Holder[]|null;loading:boolean;e
   if(error)return <div className="launchEmpty"><b>Error</b><span>{error}</span></div>;
   if(!data?.length)return <div className="launchEmpty"><b>No holders found</b></div>;
 
-  return <div className="terminalEvidenceTable">
+  return <div className="terminalEvidenceTable" style={cols(4)}>
     <div className="terminalEvidenceHead" role="row">
       <span>RANK</span><span>WALLET</span><span>BALANCE</span><span>SUPPLY %</span>
     </div>
@@ -125,7 +112,7 @@ function FirstBuyersPanel({data,loading,error}:{data:FirstBuyer[]|null;loading:b
   if(error)return <div className="launchEmpty"><b>Error</b><span>{error}</span></div>;
   if(!data?.length)return <div className="launchEmpty"><b>No first buyers found</b></div>;
 
-  return <div className="terminalEvidenceTable">
+  return <div className="terminalEvidenceTable" style={cols(4)}>
     <div className="terminalEvidenceHead" role="row">
       <span>RANK</span><span>WALLET</span><span>FIRST BUY</span><span>AMOUNT</span>
     </div>
@@ -147,7 +134,7 @@ function LiveStatePanel({mint}:{mint:string}){
   const s=data as TokenStats|null;
   if(!s)return <div className="launchEmpty"><b>No data</b></div>;
 
-  return <div className="terminalEvidenceTable">
+  return <div className="terminalEvidenceTable" style={cols(2)}>
     <div className="terminalEvidenceHead" role="row"><span>METRIC</span><span>VALUE</span></div>
     <div className="terminalEvidenceRow" role="row"><span>Trades (24h)</span><span>{s.trades24h?.toLocaleString()??"—"}</span></div>
     <div className="terminalEvidenceRow" role="row"><span>Volume (24h)</span><span>{fmtPrice(s.volume24h)}</span></div>
@@ -159,11 +146,14 @@ function LiveStatePanel({mint}:{mint:string}){
   </div>;
 }
 
-export function TerminalInvestigation({mint,symbol,initialView="Trades"}:{mint:string;symbol:string;initialView?:string}){
-  const validInitial=TABS.includes(initialView as Tab)?initialView as Tab:"Trades";
+export function TerminalInvestigation({mint,symbol,initialView="Transactions"}:{mint:string;symbol:string;initialView?:string}){
+  const validInitial=TABS.includes(initialView as Tab)?initialView as Tab:"Transactions";
   const[active,setActive]=useState<Tab>(validInitial);
 
-  const tabParam=active==="Most Profitable"?"participants":active==="Largest Holders"?"holders":active==="First 100"?"first-buyers":active==="Live State"?"stats":active==="Historical Match"?"trades":active.toLowerCase();
+  // Transactions and Live State render components that fetch their own data, so the
+  // parent must not request those tabs too — that would double every request.
+  const selfManaged=active==="Transactions"||active==="Live State"||active==="Historical Match";
+  const tabParam=selfManaged?null:active==="Most Profitable"?"participants":active==="Largest Holders"?"holders":active==="First 100"?"first-buyers":active.toLowerCase();
   const{data,loading,error}=useTokenDetail(mint,tabParam);
 
   return <div className="investigate">
@@ -178,7 +168,7 @@ export function TerminalInvestigation({mint,symbol,initialView="Trades"}:{mint:s
       <Link href={`/ask-aladdin?context=token:${mint}&label=${encodeURIComponent(`$${symbol}`)}`}>Ask Aladdin about ${symbol} {"\u2192"}</Link>
     </div>
 
-    {active==="Trades"&&<TradesPanel data={data as Trade[]|null} loading={loading} error={error}/>}
+    {active==="Transactions"&&<TransactionsPanel mint={mint} symbol={symbol}/>}
     {active==="Participants"&&<ParticipantsPanel data={data as Participant[]|null} loading={loading} error={error}/>}
     {active==="Holders"&&<HoldersPanel data={data as Holder[]|null} loading={loading} error={error}/>}
     {active==="First 100"&&<FirstBuyersPanel data={data as FirstBuyer[]|null} loading={loading} error={error}/>}
