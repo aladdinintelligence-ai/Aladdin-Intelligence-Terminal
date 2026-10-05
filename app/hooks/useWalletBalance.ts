@@ -46,7 +46,7 @@ export function useWalletBalance(walletAddress: string | null | undefined) {
       });
 
     return () => { cancelled = true; };
-  }, [walletAddress]);
+  }, [walletAddress, balance]);
 
   // Refresh function for manual triggers
   const refresh = () => {

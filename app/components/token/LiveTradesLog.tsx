@@ -75,7 +75,7 @@ function tradeKey(t:Trade,index:number):string{
 }
 
 export function LiveTradesLog({mint,symbol}:{mint:string;symbol?:string}){
-  const{data,loading,error}=useTokenDetail(mint,"trades",50,REFRESH_MS);
+  const{data,loading}=useTokenDetail(mint,"trades",50,REFRESH_MS);
   const trades=(data as Trade[]|null)??null;
   const[side,setSide]=useState<SideFilter>("all");
 
@@ -105,7 +105,7 @@ export function LiveTradesLog({mint,symbol}:{mint:string;symbol?:string}){
   },[fresh]);
 
   // Drives the relative timestamps and the live indicator.
-  const[tick,setTick]=useState(0);
+  const[,setTick]=useState(0);
   useEffect(()=>{
     const t=setInterval(()=>setTick(v=>v+1),1000);
     return () => clearInterval(t);

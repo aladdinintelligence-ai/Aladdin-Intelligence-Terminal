@@ -5,7 +5,6 @@ import {ExternalLink,Globe,Twitter,LoaderCircle} from "lucide-react";
 import {useTokenInfo} from "@/app/hooks/useTokenInfo";
 import {useTokenChart} from "@/app/hooks/useTokenChart";
 import {Skeleton} from "@/app/components/ui/Skeleton";
-import {LiveTokenChart} from "@/app/components/token/LiveTokenChart";
 import {IfaNow} from "@/app/components/ifa/IfaNow";
 import {TerminalInvestigation} from "@/app/components/token/TerminalInvestigation";
 import {Badge} from "@/app/components/ui/Badge";
@@ -81,8 +80,8 @@ export default function Live({params, searchParams}: {
   const {view} = use(searchParams);
   const router = useRouter();
   const {token, loading, error} = useTokenInfo(mint);
-  const [chartTf, setChartTf] = useState("5m");
-  const {candles, loading: chartLoading, error: chartError} = useTokenChart(mint, INTERVAL_MAP[chartTf], 60);
+  const [chartTf] = useState("5m");
+  useTokenChart(mint, INTERVAL_MAP[chartTf], 60);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(mint);

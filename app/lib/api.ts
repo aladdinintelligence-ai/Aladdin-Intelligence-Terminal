@@ -58,7 +58,7 @@ export async function askSseFetch<T extends AskSseFrame = AskSseFrame>(
 
   if (!response.ok || !response.body) {
     let msg = `Request failed with status ${response.status}`;
-    let status = response.status;
+    const status = response.status;
     try {
       const data = await response.json();
       if (data.error) msg = data.error;

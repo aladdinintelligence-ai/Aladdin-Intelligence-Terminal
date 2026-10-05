@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       } catch (error) {
         // Only sign out on explicit auth failure; retry on transient errors.
-        const status = (error as any)?.status;
+        const status = (error as { status?: number })?.status;
         const message = (error as Error)?.message || "";
         if (status === 401 || message.includes("Authentication required") || message.includes("Invalid or expired token")) {
           if (!cancelled) {
