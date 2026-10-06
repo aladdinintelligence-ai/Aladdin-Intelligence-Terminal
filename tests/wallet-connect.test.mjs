@@ -5,7 +5,7 @@ const read=path=>fs.readFileSync(new URL("../"+path,import.meta.url),"utf8");
 
 test("landing separates account entry demo access and real wallet connection",()=>{
   const page=read("app/page.tsx"),entry=read("app/components/landing/EntryModal.tsx");
-  assert.match(page,/Launch Aladdin/);assert.match(page,/Explore Demo/);
+  assert.match(page,/Launch Aladdin/);assert.match(page,/>Explore<\/button>/);
   assert.match(entry,/Continue with Google/);assert.match(entry,/Continue with Telegram/);
   assert.match(entry,/Connect Solana Wallet/);assert.match(entry,/entryAsWallet:true/);
 });

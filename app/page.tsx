@@ -5,11 +5,10 @@ import {useCallback,useState} from "react";
 import {ArrowRight,BookOpen} from "lucide-react";
 import {useRouter} from "next/navigation";
 import {EntryModal} from "@/app/components/landing/EntryModal";
-import {useAladdinWallet} from "@/app/hooks/useAladdinWallet";
 import {useAuth} from "@/app/hooks/useAuth";
 
 export default function Home(){
-  const [entryOpen,setEntryOpen]=useState(false),router=useRouter(),wallet=useAladdinWallet();
+  const [entryOpen,setEntryOpen]=useState(false),router=useRouter();
   const {user,loading}=useAuth();
   // An existing session should go straight into the product instead of being
   // asked to sign in again. Gate on `loading` so a click that lands before

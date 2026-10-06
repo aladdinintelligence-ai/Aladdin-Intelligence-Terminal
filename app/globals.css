@@ -807,6 +807,43 @@ main {
 .evidenceRow:hover {
   background: #101016;
 }
+.ogRow {
+  grid-template-columns: 36px 130px 1fr 1.5fr 0.8fr 1.2fr 1.6fr 20px;
+}
+.formationRow {
+  grid-template-columns: 36px 120px 1fr 1.2fr 0.8fr 1.2fr 1.6fr 20px;
+}
+.insiderRow {
+  grid-template-columns: 36px 120px 1fr 1.4fr 1.3fr 0.8fr 1.5fr 20px;
+}
+.clusterRow {
+  grid-template-columns: 36px 120px 1fr 1.2fr 1.2fr 1.4fr 1.5fr 20px;
+}
+.ogRow .evidenceIdentity small,
+.formationRow .evidenceIdentity small,
+.insiderRow .evidenceIdentity small,
+.clusterRow .evidenceIdentity small {
+  color: #6a7280;
+}
+.ogRow > div > em,
+.formationRow > div > em,
+.insiderRow > div > em,
+.clusterRow > div > em {
+  display: block;
+  color: #888;
+  font-size: 9px;
+  font-style: normal;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.ogMetaLine {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--text-metadata);
+}
 .evidenceIdentity small {
   display: block;
   color: #666;

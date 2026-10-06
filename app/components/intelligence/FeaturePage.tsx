@@ -3,11 +3,16 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowUpRight, CheckCircle2, ChevronRight, Filter } from "lucide-react";
 import { tokens } from "@/app/data/tokens";
-import { wallets } from "@/app/data/wallets";
 import { money, pct } from "@/app/utils/format";
 import { Badge } from "@/app/components/ui/Badge";
 import { behaviourColor } from "@/app/utils/behaviour";
 import { useMovers, type MoverToken } from "@/app/hooks/useMovers";
+import { useOg, type OgToken, type OgMeta } from "@/app/hooks/useOg";
+import { useSmartMoney, type SmartWallet, type SmartMoneyMeta } from "@/app/hooks/useSmartMoney";
+import { useFormation, type FormationToken, type FormationMeta } from "@/app/hooks/useFormation";
+import { useInsider, type InsiderToken, type InsiderMeta } from "@/app/hooks/useInsider";
+import { useClusters, type ClusterToken, type ClusterMeta } from "@/app/hooks/useClusters";
+import { useHistorical, type HistoricalToken, type HistoricalHero, type HistoricalMeta } from "@/app/hooks/useHistorical";
 
 const copy: Record<string, { eyebrow: string; title: string; desc: string; question: string }> = {
   "movers": { eyebrow: "MARKET", title: "Movers + Why", desc: "Price movement explained through participation and ownership changes.", question: "What moved, and what changed underneath?" },
@@ -25,6 +30,20 @@ const copy: Record<string, { eyebrow: string; title: string; desc: string; quest
 export function FeaturePage({ kind }: { kind: string }) {
   const c = copy[kind];
   const [filter, setFilter] = useState("All");
+  const og = useOg(20, kind === "og");
+  const smart = useSmartMoney(20, kind === "smart-money");
+  const formation = useFormation(20, kind === "formation");
+  const insider = useInsider(20, kind === "insiders");
+  const clusters = useClusters(20, kind === "clusters");
+  const historical = useHistorical(6, kind === "historical");
+  const liveMeta: { source: string; fetchedAt: string; coverage: string; askTarget?: string } | null =
+    kind === "og" ? og.meta
+      : kind === "smart-money" ? smart.meta
+        : kind === "formation" ? formation.meta
+          : kind === "insiders" ? insider.meta
+            : kind === "clusters" ? clusters.meta
+              : kind === "historical" ? historical.meta
+                : null;
 
   return (
     <>
@@ -34,13 +53,25 @@ export function FeaturePage({ kind }: { kind: string }) {
           <h1>{c.title}</h1>
           <p>{c.desc}</p>
         </div>
-        <button className="primary">Open in Ask Aladdin <ArrowUpRight size={14} /></button>
+        {liveMeta?.askTarget ? (
+          <Link className="primary" href={liveMeta.askTarget}>Open in Ask Aladdin <ArrowUpRight size={14} /></Link>
+        ) : (
+          <button className="primary">Open in Ask Aladdin <ArrowUpRight size={14} /></button>
+        )}
       </div>
       <div className="decisionQuestion">
         <span>TRADING QUESTION</span>
         <b>{c.question}</b>
         <small>Open Data Details for source and freshness</small>
       </div>
+      {liveMeta ? (
+        <details className="dataDetails">
+          <summary>Open Data Details</summary>
+          <p>Source: {liveMeta.source}</p>
+          <p>As of {new Date(liveMeta.fetchedAt).toLocaleString()}</p>
+          <p>{liveMeta.coverage}</p>
+        </details>
+      ) : null}
       <div className="toolbar">
         <div className="tabs">
           {["All", "High signal", "New", "Changed"].map(x => (
@@ -49,11 +80,14 @@ export function FeaturePage({ kind }: { kind: string }) {
         </div>
         <button><Filter size={14} />Refine</button>
       </div>
-      {kind === "smart-money" ? <WalletTable /> :
+      {kind === "smart-money" ? <WalletTable wallets={smart.wallets} meta={smart.meta} loading={smart.loading} error={smart.error} filter={filter} /> :
+       kind === "formation" ? <FormationRows tokens={formation.tokens} meta={formation.meta} loading={formation.loading} error={formation.error} filter={filter} /> :
+       kind === "insiders" ? <InsiderRows tokens={insider.tokens} meta={insider.meta} loading={insider.loading} error={insider.error} filter={filter} /> :
        kind === "narratives" ? <Narratives /> :
-       kind === "clusters" ? <Clusters /> :
-       kind === "historical" ? <Historical /> :
+       kind === "clusters" ? <ClusterRows tokens={clusters.tokens} meta={clusters.meta} loading={clusters.loading} error={clusters.error} filter={filter} /> :
+       kind === "historical" ? <HistoricalRows tokens={historical.tokens} hero={historical.hero} meta={historical.meta} loading={historical.loading} error={historical.error} filter={filter} /> :
        kind === "alerts" ? <Alerts /> :
+       kind === "og" ? <OgRows tokens={og.tokens} meta={og.meta} loading={og.loading} error={og.error} filter={filter} /> :
        <EvidenceRows kind={kind} />}
     </>
   );
@@ -98,7 +132,7 @@ function EvidenceRows({ kind }: { kind: string }) {
           </div>
           <div>
             <small>BEHAVIOURAL CHANGE</small>
-            <b>{kind === "movers" ? `${t.buyers} buyers` : kind === "insiders" ? (i === 0 ? "Creator cohort −3.2%" : "Linked supply stable") : kind === "formation" ? (i === 0 ? "DISCOVERY → BROAD ACCUMULATION" : "Profitable flow increasing") : `${t.buyers} buyers`}</b>
+            <b>{kind === "movers" ? `${t.buyers} buyers` : kind === "formation" ? (i === 0 ? "DISCOVERY → BROAD ACCUMULATION" : "Profitable flow increasing") : `${t.buyers} buyers`}</b>
           </div>
           <div>
             <small>MARKET</small>
@@ -115,7 +149,237 @@ function EvidenceRows({ kind }: { kind: string }) {
   );
 }
 
-function WalletTable() {
+const compact = (v: number) =>
+  v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}K` : String(v);
+
+function OgRows({ tokens, meta, loading, error, filter }: { tokens: OgToken[]; meta: OgMeta | null; loading: boolean; error: string | null; filter: string }) {
+  if (loading) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>Loading OG workspace...</span></div></div>;
+  }
+
+  if (error) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>{error}</span></div></div>;
+  }
+
+  if (tokens.length === 0) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>No OG tokens available</span></div></div>;
+  }
+
+  const shown = tokens.filter(t =>
+    filter === "All" || (filter === "High signal" ? t.highSignal : filter === "New" ? t.isNew : filter === "Changed" ? t.isChanged : true)
+  );
+
+  if (shown.length === 0) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>No tokens match this filter</span></div></div>;
+  }
+
+  return (
+    <div className="evidenceRows">
+      {meta ? <div className="ogMetaLine"><span>{meta.count} established assets</span><span>data details above</span></div> : null}
+      {shown.map(t => (
+        <Link href={`/live/${t.mint || t.id}`} className="evidenceRow ogRow" key={t.mint || t.id}>
+          {t.imageUrl ? (
+            <img src={t.imageUrl} alt={t.symbol} className="coin" style={{ objectFit: "cover" }} />
+          ) : (
+            <span className="coin" style={{ background: t.color }}>{t.symbol[0]}</span>
+          )}
+          <div className="evidenceIdentity">
+            <b>${t.symbol}</b>
+            <small>{t.ageDays !== null ? `${Math.round(t.ageDays)}d old` : t.name}</small>
+          </div>
+          <div>
+            <small>CURRENT STATE</small>
+            <Badge>{t.formation}</Badge>
+          </div>
+          <div>
+            <small>BEHAVIOURAL CHANGE</small>
+            <b>{t.behaviouralChange}</b>
+          </div>
+          <div>
+            <small>MARKET</small>
+            <b>{money(t.mc)} <em className={t.change !== null && t.change < 0 ? "negative" : ""}>{t.change !== null ? pct(t.change) : "—"}</em></b>
+          </div>
+          <div>
+            <small>MATURE STRUCTURE</small>
+            <b>${compact(t.liquidity)} liq · ${compact(t.volume)} vol</b>
+            <em>{t.holders ? `${compact(t.holders)} holders · Top10 ${t.top10 || 0}%` : "—"}</em>
+          </div>
+          <div>
+            <small>WHY IT MATTERS</small>
+            <span>{t.whyItMatters}</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function FormationRows({ tokens, meta, loading, error, filter }: { tokens: FormationToken[]; meta: FormationMeta | null; loading: boolean; error: string | null; filter: string }) {
+  if (loading) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>Loading market formations...</span></div></div>;
+  }
+
+  if (error) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>{error}</span></div></div>;
+  }
+
+  if (tokens.length === 0) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>No formations available</span></div></div>;
+  }
+
+  const shown = tokens.filter(t =>
+    filter === "All" ? true : filter === "High signal" ? t.highSignal : filter === "New" ? t.isNew : filter === "Changed" ? t.isChanged : true
+  );
+
+  if (shown.length === 0) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>No formations match this filter</span></div></div>;
+  }
+
+  return (
+    <div className="evidenceRows">
+      {meta ? <div className="ogMetaLine"><span>{meta.count} formations live</span><span>data details above</span></div> : null}
+      {shown.map(t => (
+        <Link href={`/live/${t.mint || t.id}`} className="evidenceRow formationRow" key={t.mint || t.id}>
+          {t.imageUrl ? (
+            <img src={t.imageUrl} alt={t.symbol} className="coin" style={{ objectFit: "cover" }} />
+          ) : (
+            <span className="coin" style={{ background: t.color }}>{t.symbol[0]}</span>
+          )}
+          <div className="evidenceIdentity">
+            <b>${t.symbol}</b>
+            <small>{t.ageDays !== null ? `${t.ageDays}d old` : t.name}</small>
+          </div>
+          <div>
+            <small>CURRENT STATE</small>
+            <Badge>{t.formation}</Badge>
+          </div>
+          <div>
+            <small>PARTICIPATION</small>
+            <b>{t.buyers.toLocaleString("en-US")} buyers · Top10 {t.top10}%</b>
+            <em>top wallet {t.top1}% of buys</em>
+          </div>
+          <div>
+            <small>MARKET</small>
+            <b>{money(t.mc)} <em className={t.change !== null && t.change < 0 ? "negative" : ""}>{t.change !== null ? pct(t.change) : "—"}</em></b>
+          </div>
+          <div>
+            <small>FLOW</small>
+            <b>Buy {money(t.buyUsd)} / Sell {money(t.sellUsd)}</b>
+            <em>{t.profitable !== null ? `${t.profitable}% profitable` : "—"} · {t.residence !== null ? `${t.residence}% migrated` : "bonding"}</em>
+          </div>
+          <div>
+            <small>WHY IT MATTERS</small>
+            <span>{t.why}</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+const insiderStageColor = (stage: string): string =>
+  stage === "ACCUMULATING" ? "#33d6a6" : stage === "DISTRIBUTING" ? "#ec795f" : stage === "EXITING" ? "#d872f2" : "#58a9f4";
+
+const entryAgo = (entryMin: number | null): string => {
+  if (entryMin == null) return "—";
+  return entryMin >= 60 ? `${Math.round(entryMin / 60)}h ago` : `${entryMin}m ago`;
+};
+
+function InsiderRows({ tokens, meta, loading, error, filter }: { tokens: InsiderToken[]; meta: InsiderMeta | null; loading: boolean; error: string | null; filter: string }) {
+  if (loading) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>Loading insider activity...</span></div></div>;
+  }
+
+  if (error) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>{error}</span></div></div>;
+  }
+
+  if (tokens.length === 0) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>No insider activity data available</span></div></div>;
+  }
+
+  const shown = tokens.filter(t =>
+    filter === "All" ? true : filter === "High signal" ? t.highSignal : filter === "New" ? t.isNew : filter === "Changed" ? t.isChanged : true
+  );
+
+  if (shown.length === 0) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>No tokens match this filter</span></div></div>;
+  }
+
+  return (
+    <div className="evidenceRows">
+      {meta ? <div className="ogMetaLine"><span>{meta.count} insider cohorts tracked</span><span>data details above</span></div> : null}
+      {shown.map(t => (
+        <Link href={`/live/${t.mint || t.id}`} className="evidenceRow insiderRow" key={t.mint || t.id}>
+          {t.imageUrl ? (
+            <img src={t.imageUrl} alt={t.symbol} className="coin" style={{ objectFit: "cover" }} />
+          ) : (
+            <span className="coin" style={{ background: t.color }}>{t.symbol[0]}</span>
+          )}
+          <div className="evidenceIdentity">
+            <b>${t.symbol}</b>
+            <small>{t.ageDays !== null ? `${t.ageDays}d old` : t.name}</small>
+          </div>
+          <div>
+            <small>CURRENT STATE</small>
+            <Badge color={insiderStageColor(t.stage)}>{t.stage}</Badge>
+          </div>
+          <div>
+            <small>LINKED SUPPLY</small>
+            <b>{t.cohortSize.toLocaleString("en-US")} wallets · 48h</b>
+            <em>{t.buyers.toLocaleString("en-US")} buyers · lead {t.lead ? `${t.lead.id}…` : "—"} entered {entryAgo(t.lead ? t.lead.entryMin : null)}</em>
+          </div>
+          <div>
+            <small>SUPPLY FLOW</small>
+            <b>{t.cohortNetUsd >= 0 ? `Net ${money(t.cohortNetUsd)} sold` : `Net ${money(-t.cohortNetUsd)} added`}</b>
+            <em>{t.cohortPressure != null ? `Pressure ${t.cohortPressure >= 0 ? "+" : ""}${t.cohortPressure}%` : "—"} · avg sold {t.cohortAvgSold != null ? `${t.cohortAvgSold}%` : "—"}</em>
+          </div>
+          <div>
+            <small>MARKET</small>
+            <b>{money(t.mc)} <em className={t.change !== null && t.change < 0 ? "negative" : ""}>{t.change !== null ? pct(t.change) : "—"}</em></b>
+          </div>
+          <div>
+            <small>WHY IT MATTERS</small>
+            <span>{t.why}</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function WalletTable({ wallets, meta, loading, error, filter }: { wallets: SmartWallet[]; meta: SmartMoneyMeta | null; loading: boolean; error: string | null; filter: string }) {
+  if (loading) {
+    return <div className="dataTable walletTable"><div className="launchEmpty"><span>Loading proven wallets...</span></div></div>;
+  }
+
+  if (error) {
+    return <div className="dataTable walletTable"><div className="launchEmpty"><span>{error}</span></div></div>;
+  }
+
+  if (wallets.length === 0) {
+    return <div className="dataTable walletTable"><div className="launchEmpty"><span>No proven wallet data available</span></div></div>;
+  }
+
+  const shown = wallets.filter(w =>
+    filter === "All"
+      ? true
+      : filter === "High signal"
+        ? w.behaviour === "Smart Money" || (w.winRate >= 60 && w.computableTokens >= 2)
+        : filter === "New"
+          ? w.openCount > 0
+          : filter === "Changed"
+            ? w.realizedPnl > 0 && w.holdingPct < 50
+            : true
+  );
+
+  if (shown.length === 0) {
+    return <div className="dataTable walletTable"><div className="launchEmpty"><span>No wallets match this filter</span></div></div>;
+  }
+
   return (
     <div className="dataTable walletTable">
       <div className="tr head">
@@ -123,19 +387,23 @@ function WalletTable() {
         <span>WIN RATE</span><span>SAMPLE</span><span>ENTRY STAGE</span>
         <span>OPEN POSITION</span><span></span><span></span>
       </div>
-      {wallets.map(w => (
-        <Link href={`/wallet/${w.id}`} className="tr" key={w.id}>
-          <b>{w.short}</b>
-          <span><Badge color={behaviourColor[w.behaviour]}>{w.behaviour}</Badge></span>
-          <b className="buy">{money(w.pnl)}</b>
-          <span>{w.winRate}%</span>
-          <span>{w.trades} trades</span>
-          <span>{w.entry}</span>
-          <span>{w.holding} remains</span>
-          <span>Repeatable</span>
-          <ChevronRight size={14} />
-        </Link>
-      ))}
+      {meta ? <div className="ogMetaLine"><span>{meta.count} proven wallets</span><span>data details above</span></div> : null}
+      {shown.map(w => {
+        const short = `${w.address.slice(0, 4)}...${w.address.slice(-4)}`;
+        return (
+          <Link href={`/wallet/${w.id}`} className="tr" key={w.address}>
+            <b>{short}</b>
+            <span><Badge color={(behaviourColor as Record<string, string>)[w.behaviour] || "#8b7cf6"}>{w.behaviour}</Badge></span>
+            <b className="buy">{money(w.realizedPnl)}</b>
+            <span>{w.winRate}%</span>
+            <span>{w.sampleTokens} tokens</span>
+            <span>{w.entryStage.label} into ${w.entryStage.token}</span>
+            <span>{w.openUsd > 0 ? `${money(w.openUsd)} · ${w.holdingPct}%` : "Fully exited"}</span>
+            <span>{w.repeatable ? "Repeatable" : "—"}</span>
+            <ChevronRight size={14} />
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -195,47 +463,125 @@ function Narratives() {
   );
 }
 
-function Clusters() {
+const clusterStageColor = (stage: string): string =>
+  stage === "ACCUMULATING" ? "#33d6a6" : stage === "DISTRIBUTING" ? "#ec795f" : "#58a9f4";
+
+function ClusterRows({ tokens, meta, loading, error, filter }: { tokens: ClusterToken[]; meta: ClusterMeta | null; loading: boolean; error: string | null; filter: string }) {
+  if (loading) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>Loading coordinated wallets...</span></div></div>;
+  }
+
+  if (error) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>{error}</span></div></div>;
+  }
+
+  if (tokens.length === 0) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>No coordinated clusters detected</span></div></div>;
+  }
+
+  const shown = tokens.filter(t =>
+    filter === "All" ? true : filter === "High signal" ? t.highSignal : filter === "New" ? t.isNew : filter === "Changed" ? t.isChanged : true
+  );
+
+  if (shown.length === 0) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>No clusters match this filter</span></div></div>;
+  }
+
   return (
-    <div className="cardGrid">
-      {[19, 7, 31, 42].map((n, i) => (
-        <article className="clusterCard" key={n}>
-          <header><span>{n} wallets</span><Badge color="#8b7cf6">Linked</Badge></header>
-          <h2>Cluster {i + 1}</h2>
-          <p>Repeated coordinated buying pattern detected across {n} wallets.</p>
-          <Link href="/live/bark">View evidence <ChevronRight size={14} /></Link>
-        </article>
+    <div className="evidenceRows">
+      {meta ? <div className="ogMetaLine"><span>{meta.count} wallet clusters detected</span><span>data details above</span></div> : null}
+      {shown.map(t => (
+        <Link href={`/live/${t.representativeMint || t.id}`} className="evidenceRow clusterRow" key={t.id}>
+          <span className="coin" style={{ background: t.color }}>{t.name[0]}</span>
+          <div className="evidenceIdentity">
+            <b>{t.name}</b>
+            <small>{t.walletCount} wallets · {t.tokenCount} tokens</small>
+          </div>
+          <div>
+            <small>CURRENT STATE</small>
+            <Badge color={clusterStageColor(t.stage)}>{t.stage}</Badge>
+          </div>
+          <div>
+            <small>OVERLAP</small>
+            <b>{t.sharedTokenCount} shared tokens</b>
+            <em>{t.coMovements} timed co-movements</em>
+          </div>
+          <div>
+            <small>SUPPLY FLOW</small>
+            <b>{t.netUsd >= 0 ? `Net ${money(t.netUsd)} sold` : `Net ${money(-t.netUsd)} added`}</b>
+            <em className={t.pressure !== null && t.pressure < 0 ? "negative" : ""}>{t.pressure != null ? `Pressure ${t.pressure >= 0 ? "+" : ""}${t.pressure}%` : "—"}</em>
+          </div>
+          <div>
+            <small>TOP TOKENS</small>
+            <b>{t.topTokens.slice(0, 3).map(x => `$${x.symbol}`).join(" · ") || "—"}</b>
+            <em>members {t.members.slice(0, 4).map(m => m.id).join(", ")}{t.members.length > 4 ? "…" : ""}</em>
+          </div>
+          <div>
+            <small>WHY IT MATTERS</small>
+            <span>{t.why}</span>
+          </div>
+          <ChevronRight size={16} />
+        </Link>
       ))}
     </div>
   );
 }
 
-function Historical() {
+function HistoricalRows({ tokens, hero, meta, loading, error, filter }: { tokens: HistoricalToken[]; hero: HistoricalHero | null; meta: HistoricalMeta | null; loading: boolean; error: string | null; filter: string }) {
+  if (loading) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>Matching live formations against the active pool...</span></div></div>;
+  }
+
+  if (error) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>{error}</span></div></div>;
+  }
+
+  if (tokens.length === 0) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>No historical match data available yet</span></div></div>;
+  }
+
+  const shown = tokens.filter(t =>
+    filter === "All" ? true : filter === "High signal" ? t.signal : filter === "New" ? t.isNew : filter === "Changed" ? t.isChanged : true
+  );
+
+  if (shown.length === 0) {
+    return <div className="evidenceRows"><div className="launchEmpty"><span>No matches fit this filter</span></div></div>;
+  }
+
+  const lead = shown[0];
+  const leadDiffs = (lead && lead.differences && lead.differences.length ? lead.differences : []).slice(0, 3);
+
   return (
     <div className="historyLayout">
       <section>
-        <div className="matchHero">
-          <span><small>FORMATION MATCHES</small><b>83</b></span>
-          <span><small>MEDIAN PEAK</small><b>3.8x</b></span>
-          <span><small>SUCCESSFUL SUBSET</small><b>29</b></span>
-          <span><small>FAILED SUBSET</small><b>37</b></span>
-        </div>
-        {tokens.slice(0, 4).map((t, i) => (
-          <Link href={`/live/${t.id}`} className="matchRow" key={t.id}>
-            <b>{92 - i * 4}%</b>
+        {hero ? (
+          <div className="matchHero">
+            <span><small>FORMATION MATCHES</small><b>{hero.matches}</b></span>
+            <span><small>MEDIAN PEAK</small><b>{hero.medianPeak != null ? `${hero.medianPeak.toFixed(1)}x` : "—"}</b></span>
+            <span><small>SUCCESSFUL SUBSET</small><b>{hero.successful}</b></span>
+            <span><small>FAILED SUBSET</small><b>{hero.failed}</b></span>
+          </div>
+        ) : null}
+        {meta ? <div className="ogMetaLine"><span>{meta.count} formations matched out of {hero ? hero.analyzed : "—"} analysed</span><span>data details above</span></div> : null}
+        {shown.map(t => (
+          <Link href={`/live/${t.mint || t.id}`} className="matchRow" key={t.id}>
+            <b>{t.similarity}%</b>
             <span>${t.symbol}</span>
             <span>{t.formation}</span>
-            <span>Peak {6.4 - i * 1.2}x</span>
-            <span>{t.retention}% retained</span>
+            <span>Peak {t.medianPeak != null ? `${t.medianPeak.toFixed(1)}x` : "—"}</span>
+            <span>{t.retained}% retained</span>
             <ChevronRight size={14} />
           </Link>
         ))}
       </section>
       <aside className="differencePanel">
         <h3>Important differences</h3>
-        <p><CheckCircle2 />Profitable-wallet entry timing is earlier than 68% of successful matches.</p>
-        <p><CheckCircle2 />First-100 retention is 15 points above the full sample median.</p>
-        <p className="warnText">Top-10 concentration is rising, unlike the strongest successful subset.</p>
+        {lead && lead.topMatch ? (
+          <p><CheckCircle2 />Closest match $ {lead.topMatch.symbol} — {lead.topMatch.similarity}% similar, resolved {lead.topMatch.outcome} ({lead.topMatch.difference}).</p>
+        ) : null}
+        {leadDiffs.map(d => (
+          <p key={d} className="warnText">{d}</p>
+        ))}
         <small>Similarity is context, not a prediction.</small>
       </aside>
     </div>

@@ -1,14 +1,14 @@
 "use client";
 import Link from "next/link";
 import {useState} from "react";
-import type {AnswerMode,AskAladdinAnswer,LegacyAskAladdinAnswer,ResolvedAnalysisPeriod} from "@/app/types/ask-aladdin";
-import {buildStructuredAnswer} from "@/app/utils/ask-query";
+import type {AskAladdinAnswer,LegacyAskAladdinAnswer,ResolvedAnalysisPeriod} from "@/app/types/ask-aladdin";
 import {QueryResultTable} from "./QueryResultTable";
 import {IntelligenceAnswer} from "./IntelligenceAnswer";
 
-export function StructuredAnswer({answer,question,period,onExport}:{answer:AskAladdinAnswer|LegacyAskAladdinAnswer;question:string;period:ResolvedAnalysisPeriod;onExport:()=>void}){
- const structured="result_rows" in answer?answer:buildStructuredAnswer(question,answer.mode as AnswerMode,period);
- const [currency,setCurrency]=useState<"SOL"|"USD">(structured.currency_display||"SOL");
+export function StructuredAnswer({answer,question,onExport}:{answer:AskAladdinAnswer|LegacyAskAladdinAnswer;question:string;period:ResolvedAnalysisPeriod;onExport:()=>void}){
+  const [currency,setCurrency]=useState<"SOL"|"USD">("currency_display" in answer?answer.currency_display||"SOL":"SOL");
+ if(!("result_rows" in answer))return <div className="conversationReply"><p>{"direct_answer" in answer&&typeof answer.direct_answer==="string"?answer.direct_answer:question}</p></div>;
+ const structured=answer;
  if(structured.has_data===false)return <div className="conversationReply"><p>{structured.direct_answer}</p></div>;
  if(structured.presentation)return <IntelligenceAnswer presentation={structured.presentation} profileSummary={structured.profile_summary}/>;
  if(structured.availability!=="available")return <div className="structuredQueryAnswer noAnswer"><h2>{structured.direct_answer}</h2>{structured.profile_summary&&structured.profile_summary!==structured.direct_answer?<p className="profileSummary">{structured.profile_summary}</p>:null}</div>;
