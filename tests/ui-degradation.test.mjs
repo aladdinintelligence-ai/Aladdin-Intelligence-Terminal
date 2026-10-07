@@ -54,3 +54,14 @@ test("FeaturePage renders N/A instead of crashing on missing fields", () => {
   assert.match(fp, /w\.winRate != null/);
   assert.match(fp, /w\.holdingPct != null/);
 });
+
+test("each intel panel is isolated behind an error boundary", () => {
+  const pb = read("app/components/intelligence/PanelBoundary.tsx");
+  assert.match(pb, /extends Component/);
+  assert.match(pb, /getDerivedStateFromError/);
+  assert.match(pb, /PANEL UNAVAILABLE/);
+  assert.match(pb, /Other panels are unaffected/);
+  const fp = read("app/components/intelligence/FeaturePage.tsx");
+  assert.match(fp, /import PanelBoundary/);
+  assert.ok((fp.match(/<PanelBoundary/g) || []).length >= 8);
+});

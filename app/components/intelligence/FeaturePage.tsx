@@ -6,6 +6,7 @@ import { tokens } from "@/app/data/tokens";
 import { money, pct } from "@/app/utils/format";
 import { Badge } from "@/app/components/ui/Badge";
 import MetaLine from "@/app/components/intelligence/MetaLine";
+import PanelBoundary from "@/app/components/intelligence/PanelBoundary";
 import { behaviourColor } from "@/app/utils/behaviour";
 import { useMovers, type MoverToken } from "@/app/hooks/useMovers";
 import { useOg, type OgToken, type OgMeta } from "@/app/hooks/useOg";
@@ -81,15 +82,15 @@ export function FeaturePage({ kind }: { kind: string }) {
         </div>
         <button><Filter size={14} />Refine</button>
       </div>
-      {kind === "smart-money" ? <WalletTable wallets={smart.wallets} meta={smart.meta} loading={smart.loading} error={smart.error} filter={filter} /> :
-       kind === "formation" ? <FormationRows tokens={formation.tokens} meta={formation.meta} loading={formation.loading} error={formation.error} filter={filter} /> :
-       kind === "insiders" ? <InsiderRows tokens={insider.tokens} meta={insider.meta} loading={insider.loading} error={insider.error} filter={filter} /> :
-       kind === "narratives" ? <Narratives /> :
-       kind === "clusters" ? <ClusterRows tokens={clusters.tokens} meta={clusters.meta} loading={clusters.loading} error={clusters.error} filter={filter} /> :
-       kind === "historical" ? <HistoricalRows tokens={historical.tokens} hero={historical.hero} meta={historical.meta} loading={historical.loading} error={historical.error} filter={filter} /> :
-       kind === "alerts" ? <Alerts /> :
-       kind === "og" ? <OgRows tokens={og.tokens} meta={og.meta} loading={og.loading} error={og.error} filter={filter} /> :
-       <EvidenceRows kind={kind} />}
+      {kind === "smart-money" ? <PanelBoundary name="Proven wallets"><WalletTable wallets={smart.wallets} meta={smart.meta} loading={smart.loading} error={smart.error} filter={filter} /></PanelBoundary> :
+       kind === "formation" ? <PanelBoundary name="Market formations"><FormationRows tokens={formation.tokens} meta={formation.meta} loading={formation.loading} error={formation.error} filter={filter} /></PanelBoundary> :
+       kind === "insiders" ? <PanelBoundary name="Insider activity"><InsiderRows tokens={insider.tokens} meta={insider.meta} loading={insider.loading} error={insider.error} filter={filter} /></PanelBoundary> :
+       kind === "narratives" ? <PanelBoundary name="Narratives"><Narratives /></PanelBoundary> :
+       kind === "clusters" ? <PanelBoundary name="Coordinated wallets"><ClusterRows tokens={clusters.tokens} meta={clusters.meta} loading={clusters.loading} error={clusters.error} filter={filter} /></PanelBoundary> :
+       kind === "historical" ? <PanelBoundary name="Historical match"><HistoricalRows tokens={historical.tokens} hero={historical.hero} meta={historical.meta} loading={historical.loading} error={historical.error} filter={filter} /></PanelBoundary> :
+       kind === "alerts" ? <PanelBoundary name="Alerts"><Alerts /></PanelBoundary> :
+       kind === "og" ? <PanelBoundary name="Established / OG"><OgRows tokens={og.tokens} meta={og.meta} loading={og.loading} error={og.error} filter={filter} /></PanelBoundary> :
+       <PanelBoundary name="Evidence"><EvidenceRows kind={kind} /></PanelBoundary>}
     </>
   );
 }
