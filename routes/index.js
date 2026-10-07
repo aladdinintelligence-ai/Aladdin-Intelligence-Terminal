@@ -6,6 +6,7 @@ import askRouter from './ask.js';
 import { getTokenInfoController } from '../controllers/token/tokenInfoController.js';
 import { getTokenChartController } from '../controllers/token/tokenChartController.js';
 import { getTokenDetailController } from '../controllers/token/tokenDetailController.js';
+import { getPriceController } from '../controllers/priceController.js';
 
 const router = Router();
 
@@ -25,6 +26,7 @@ router.get('/api/formation', formationController.getFormationController);
 router.get('/api/insiders', insiderController.getInsiderController);
 router.get('/api/clusters', clusterController.getClusterController);
 router.get('/api/historical', historicalController.getHistoricalController);
+router.get('/api/price/sol', getPriceController);
 
 router.post('/api/tokens/:mint/sync', requireAuth, tokensController.syncTokenController);
 router.get('/api/tokens/:mint', requireAuth, tokensController.getTokenController);
