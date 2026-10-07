@@ -1,10 +1,5 @@
-import axios from 'axios';
-import { graphql as providerGraphql, provider as dataProvider } from '../../providers/index.js';
-
-const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex/tokens';
-const cache = new Map();
-const inflight = new Map();
-const CACHE_TTL = 120_000;
+import { provider as dataProvider } from '../../providers/index.js';
+import dl from '../../providers/dataLayer.js';
 
 const CANDIDATE_LIMIT = 200;
 const INSIDER_MAX_AGE_DAYS = 14;
@@ -39,11 +34,13 @@ const colors = [
   '#f0a640', '#6b83ee', '#8990a0',
 ];
 
-function isQuotaError(err) {
-  const message = err?.message || '';
-  return message.includes('402')
-    || message.includes('429')
-    || /quota|points limit|rate limit|session limit|concurrent/i.test(message);
+// Provider queries flow through the data layer: budget gate, token bucket,
+// circuit breaker and retry/backoff are handled there. Errors are thrown
+// upward so the dl.fetch wrapper can serve stale or { unavailable }.
+async function dlBq(query, label) {
+  const res = await dl.bitquery(query, label, { feed: 'insider', priority: 'user' });
+  if (res.error) throw new Error(res.error);
+  return res;
 }
 
 function generateColor(mint) {
@@ -68,17 +65,6 @@ function sinceIso(hours) {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 }
 
-async function gqlWithRetry(query, label, attempts = 2) {
-  let result = await providerGraphql(query, label);
-  for (let attempt = 1; attempt < attempts; attempt++) {
-    const transient = result.error && /socket|aborted|timeout|hang up|ECONNRESET|408/i.test(result.error);
-    if (!transient) break;
-    await new Promise(function (resolve) { setTimeout(resolve, 900); });
-    result = await providerGraphql(query, label);
-  }
-  return result;
-}
-
 // Top traded meme tokens over 7d: pool of freshly launched candidates.
 async function fetchVolumeLeaders() {
   const since7d = sinceIso(24 * 7);
@@ -100,8 +86,7 @@ async function fetchVolumeLeaders() {
     }
   }`;
 
-  const { error, data } = await gqlWithRetry(query, ':insider:leaders');
-  if (error) throw new Error(error);
+  const { data } = await dlBq(query, ':insider:leaders');
 
   const leaders = [];
   const seen = new Set();
@@ -119,23 +104,16 @@ async function fetchVolumeLeaders() {
   return leaders;
 }
 
+// Every pool token's DexScreener pairs for market thresholds and launch age.
+// The data layer batches (30/chunk), rate-limits and retries; an error throws.
 async function fetchPairsByMint(mints) {
+  const res = await dl.dexBatch(mints, { feed: 'insider' });
+  if (res.error) throw new Error(res.error);
   const pairsByMint = new Map();
-  const chunks = [];
-  for (let i = 0; i < mints.length; i += 30) chunks.push(mints.slice(i, i + 30));
-  await Promise.all(chunks.slice(0, 8).map(async function (batch) {
-    try {
-      const { data } = await axios.get(DEXSCREENER_API + '/' + batch.join(','), { timeout: 10000 });
-      for (const pair of (data && data.pairs) || []) {
-        const addr = pair && pair.baseToken && pair.baseToken.address;
-        if (!addr) continue;
-        if (!pairsByMint.has(addr)) pairsByMint.set(addr, []);
-        pairsByMint.get(addr).push(pair);
-      }
-    } catch (err) {
-      console.error('[insider] DexScreener fetch failed:', err.message);
-    }
-  }));
+  for (const mint of mints) {
+    const pairs = (res[mint] || []).filter(function (p) { return p && p.baseToken && p.baseToken.address === mint; });
+    if (pairs.length) pairsByMint.set(mint, pairs);
+  }
   return pairsByMint;
 }
 
@@ -194,8 +172,7 @@ async function fetchRecentTrades(mints) {
         }
       }
     }`;
-    return gqlWithRetry(query, ':insider:recent:' + (idx + 1)).then(function (res) {
-      if (res.error) throw new Error(res.error);
+    return dlBq(query, ':insider:recent:' + (idx + 1)).then(function (res) {
       return (res.data && res.data.Solana && res.data.Solana.DEXTradeByTokens) || [];
     });
   });
@@ -299,27 +276,40 @@ function formatUsd(value) {
   return '$' + Math.round(value);
 }
 
-function buildMeta(count, coverage) {
+function buildMeta(count, coverage, marketError) {
   return {
     count,
-    source: dataProvider + '+dexscreener',
+    source: marketError ? dataProvider : dataProvider + '+dexscreener',
     fetchedAt: new Date().toISOString(),
     coverage,
     askTarget: '/ask-aladdin?q=' + encodeURIComponent('Is linked supply accumulating or distributing?'),
   };
 }
 
-async function buildInsiderResponse(limit) {
-  const cacheKey = 'insiders:' + limit;
+function emptyResponse(message, marketError) {
+  return { data: [], meta: buildMeta(0, message, marketError) };
+}
 
+const MARKET_DOWN_MESSAGE = 'Insider screening metrics derive from sampled DEX trades; market detail temporarily unavailable.';
+
+async function buildInsiderResponse(limit) {
   const leaders = await fetchVolumeLeaders();
   if (leaders.length === 0) {
-    const empty = { data: [], meta: buildMeta(0, 'No candidate tokens were available for insider screening.') };
-    cache.set(cacheKey, { data: empty, ts: Date.now() });
-    return empty;
+    return emptyResponse('No candidate tokens were available for insider screening.', false);
   }
 
-  const pairsByMint = await fetchPairsByMint(leaders.map(function (t) { return t.mint; }));
+  // Market detail (DexScreener) is best-effort: when it fails, the on-chain
+  // cohort metrics still stand but the source label and coverage must be
+  // truthful about what contributed.
+  let pairsByMint;
+  let marketError = false;
+  try {
+    pairsByMint = await fetchPairsByMint(leaders.map(function (t) { return t.mint; }));
+  } catch (exc) {
+    console.error('[insider] DexScreener fetch failed:', exc.message);
+    marketError = true;
+    pairsByMint = new Map();
+  }
 
   const pool = [];
   for (const leader of leaders) {
@@ -346,9 +336,10 @@ async function buildInsiderResponse(limit) {
   }
 
   if (pool.length === 0) {
-    const empty = { data: [], meta: buildMeta(0, 'No recently launched tokens matched the current thresholds.') };
-    cache.set(cacheKey, { data: empty, ts: Date.now() });
-    return empty;
+    return emptyResponse(
+      marketError ? MARKET_DOWN_MESSAGE : 'No recently launched tokens matched the current thresholds.',
+      marketError
+    );
   }
 
   pool.sort(function (a, b) { return b.volume24h - a.volume24h; });
@@ -455,59 +446,42 @@ async function buildInsiderResponse(limit) {
   });
   const selected = rows.slice(0, limit);
 
-  const coverage = 'Early-entry wallets are the cohort whose sampled history in the last ' + RECENT_WINDOW_HOURS + 'h (Bitquery keeps up to three '
-    + 'recent legs per wallet) starts with a buy — a visible recent entry rather than a verified pair-launch event. Redistribution measures cohort '
-    + 'sell ratio and net sell/buy flow over the sampled window, with realised PnL bounded by average-cost entry. '
-    + 'Funding linkage is not verified, so "linked" here means early-window timing only; relationship evidence is not '
-    + 'proof of insider ownership or coordination.';
+  const coverage = marketError
+    ? MARKET_DOWN_MESSAGE
+    : 'Early-entry wallets are the cohort whose sampled history in the last ' + RECENT_WINDOW_HOURS + 'h (Bitquery keeps up to three '
+      + 'recent legs per wallet) starts with a buy — a visible recent entry rather than a verified pair-launch event. Redistribution measures cohort '
+      + 'sell ratio and net sell/buy flow over the sampled window, with realised PnL bounded by average-cost entry. Market cap, liquidity, volume, '
+      + '24h change and age come from DexScreener pairs. Funding linkage is not verified, so "linked" here means early-window timing only; '
+      + 'relationship evidence is not proof of insider ownership or coordination.';
 
-  const response = { data: selected, meta: buildMeta(selected.length, coverage) };
-  cache.set(cacheKey, { data: response, ts: Date.now() });
-  return response;
-}
-
-// One build per cache key at a time: warm refresh and inbound requests share
-// the same provider scan instead of doubling concurrent query load.
-function buildOrJoin(limit) {
-  const cacheKey = 'insiders:' + limit;
-  const existing = inflight.get(cacheKey);
-  if (existing) return existing;
-  const pending = buildInsiderResponse(limit);
-  inflight.set(cacheKey, pending);
-  pending.finally(function () { inflight.delete(cacheKey); }).catch(function () { /* swallowed by caller */ });
-  return pending;
+  return { data: selected, meta: buildMeta(selected.length, coverage, marketError) };
 }
 
 export async function getInsiderController(req, res, next) {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 30);
   try {
-    const cached = cache.get('insiders:' + limit);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      return res.json(cached.data);
-    }
+    const out = await dl.fetch({
+      key: 'insiders:' + limit,
+      feed: 'insider',
+      priority: 'user',
+      request: () => buildInsiderResponse(limit),
+    });
 
-    return res.json(await buildOrJoin(limit));
-  } catch (exc) {
-    const stale = cache.get('insiders:' + limit);
-    if (stale && stale.data && stale.data.data) {
-      return res.json(stale.data);
-    }
-    if (isQuotaError(exc)) {
+    if (out.unavailable) {
       return res.status(503).json({
-        error: 'provider_quota',
-        message: 'Live insider screening is temporarily unavailable. Please try again in a few minutes.',
+        error: 'upstream_unavailable',
+        message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
       });
     }
-    return next(exc);
-  }
-}
 
-async function refreshDefaultCache() {
-  try {
-    await buildOrJoin(20);
-  } catch (err) {
-    console.error('[insider] cache refresh failed:', err.message);
+    const response = out.data;
+    if (out.stale && response.meta) response.meta.stale = true;
+    return res.json(response);
+  } catch (exc) {
+    console.error('[insider] handler error:', exc && exc.message ? exc.message : exc);
+    return res.status(502).json({
+      error: 'upstream_unavailable',
+      message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
+    });
   }
 }
-setTimeout(refreshDefaultCache, 12000);
-setInterval(refreshDefaultCache, 119_000);
