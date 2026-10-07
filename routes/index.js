@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { tokensController, internalController, healthController, launchesController, moversController, ogController, smartMoneyController, formationController, insiderController, clusterController, historicalController } from '../controllers/index.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import swapRouter from './swap.js';
 import askRouter from './ask.js';
 import { getTokenInfoController } from '../controllers/token/tokenInfoController.js';
@@ -40,6 +40,6 @@ router.get('/api/wallets/:wallet/tokens/:mint', requireAuth, tokensController.ge
 
 router.get('/api/internal/wallets/:wallet/behaviour-evaluation', requireAuth, internalController.behaviourEvaluationController);
 router.get('/api/internal/tokens/:mint/wallets/:wallet/identity', requireAuth, internalController.identityDebugController);
-router.get('/api/internal/budget', requireAuth, getBudgetController);
+router.get('/api/internal/budget', requireAuth, requireAdmin, getBudgetController);
 
 export default router;

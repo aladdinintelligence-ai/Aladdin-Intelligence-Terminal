@@ -57,3 +57,18 @@ export function requireAuth(req, res, next) {
 
   next();
 }
+
+// ADMIN_USER_IDS (comma-separated account userIds) gates internal ops
+// endpoints. Runs after requireAuth, so unauthenticated callers are already
+// stopped with 401 and this only ever denies authenticated non-admins.
+export function requireAdmin(req, res, next) {
+  const admins = (process.env.ADMIN_USER_IDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const userId = req.user && req.user.userId;
+  if (!userId || !admins.includes(userId)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  return next();
+}
