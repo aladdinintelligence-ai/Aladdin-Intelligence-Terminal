@@ -160,6 +160,11 @@ function classify(res) {
   if (status === 402) return { kind: 'quota' };
   const quota = quoteRe.test(msg);
   if (quota) return { kind: 'quota' };
+  // 401 (auth) is transient for Bitquery (intermittent Unauthorized under
+  // rate-limited bursts), so retry it rather than negative-caching: a single
+  // flake must not brick a query for the negative-cache TTL. Other 4xx mean
+  // the query itself (or its dataset/plan) is bad -> permanent, cacheable.
+  if (status === 401) return { kind: 'retryable' };
   if (status >= 400 && status < 500) return { kind: 'client' };
   return { kind: 'retryable' };
 }
