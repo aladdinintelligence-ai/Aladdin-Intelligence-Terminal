@@ -360,6 +360,57 @@ describe('freshness metadata', () => {
   });
 });
 
+describe('auth block lifecycle', () => {
+  test('a 401 opens the block; admin reset clears it, and a restart zeroes the same state', async () => {
+    let calls = 0;
+    let healthy = false;
+    initDataLayer({
+      // an earlier test may have injected a fake clock; this one compares
+      // against Date.now()
+      timeFn: () => Date.now(),
+      bitqueryResolver: async () => {
+        calls += 1;
+        if (!healthy) return { error: 'Unauthorized', status: 401 };
+        return { data: { ok: true } };
+      },
+    });
+    const origError = console.error;
+    console.error = () => {};
+    try {
+      // 401 opens a long manual block
+      const rejected = await bitquery('{ q }', 't', { feed: 'authlife' });
+      assert.equal(rejected.status, 401);
+      assert.ok(internals.authOpenUntil() > Date.now());
+      const blocked = await bitquery('{ q }', 't', { feed: 'authlife' });
+      assert.match(blocked.error, /breaker/);
+      assert.equal(calls, 1); // blocked off the wire
+
+      // admin-only reset (clearOpenBlocks via POST /api/internal/budget/reset)
+      // clears just the block: traffic resumes without a restart
+      dl.clearOpenBlocks();
+      assert.equal(internals.authOpenUntil(), 0);
+      healthy = true;
+      const resumed = await bitquery('{ q }', 't', { feed: 'authlife' });
+      assert.equal(resumed.stale, false);
+      assert.equal(calls, 2);
+
+      // a process restart reaches exactly the same zeroed state, because these
+      // opens are module-level variables that re-initialize; resetCacheState()
+      // exercises that same zeroing in-process
+      healthy = false;
+      await bitquery('{ q }', 't', { feed: 'authlife' });
+      assert.ok(internals.authOpenUntil() > Date.now());
+      resetCacheState();
+      assert.equal(internals.authOpenUntil(), 0);
+      assert.equal(internals.quotaOpenUntil(), 0);
+      assert.equal(internals.dexQuotaOpenUntil(), 0);
+    } finally {
+      console.error = origError;
+      resetCacheState();
+    }
+  });
+});
+
 describe('feed scheduler', () => {
   test('hot feed refreshes, cold feed stays idle', async () => {
     let hotRuns = 0;

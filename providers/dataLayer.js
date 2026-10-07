@@ -626,6 +626,17 @@ export function resetCacheState() {
   authOpenUntil = 0;
 }
 
+// Clears ONLY the manual provider blocks (auth/quota opens) without touching
+// caches or counters — the admin escape hatch for "the key was fixed, resume
+// traffic now" (POST /api/internal/budget/reset). A process restart reaches
+// the same state naturally, because these opens are module-level variables
+// that re-initialize to 0.
+export function clearOpenBlocks() {
+  quotaOpenUntil = 0;
+  dexQuotaOpenUntil = 0;
+  authOpenUntil = 0;
+}
+
 export const internals = {
   TokenBucket,
   bitqueryBucket,
@@ -638,6 +649,8 @@ export const internals = {
   negativeCache,
   cacheEmpty,
   authOpenUntil: () => authOpenUntil,
+  quotaOpenUntil: () => quotaOpenUntil,
+  dexQuotaOpenUntil: () => dexQuotaOpenUntil,
 };
 
 export default {
@@ -662,6 +675,7 @@ export default {
   hasCached,
   hasInflight,
   resetCacheState,
+  clearOpenBlocks,
   setTokenBucketEnabled,
   isFeedEnabled,
   lastFreshness,

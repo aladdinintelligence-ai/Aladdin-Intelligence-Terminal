@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { getBudgetController } from '../controllers/budget/budgetController.js';
+import { getBudgetController, resetBudgetController } from '../controllers/budget/budgetController.js';
 import { requireAdmin } from '../middleware/auth.js';
+import dl from '../providers/dataLayer.js';
 import { budget } from '../providers/budgetTracker.js';
 
 describe('budget endpoint', () => {
@@ -12,6 +13,11 @@ describe('budget endpoint', () => {
     const routes = readFileSync(join(process.cwd(), 'routes', 'index.js'), 'utf8');
     assert.match(routes, /import \{[^}]*\brequireAdmin\b[^}]*\} from '\.\.\/middleware\/auth\.js'/);
     assert.match(routes, /router\.get\('\/api\/internal\/budget', requireAuth, requireAdmin, getBudgetController\)/);
+  });
+
+  test('registers the admin-only reset POST on the router', () => {
+    const routes = readFileSync(join(process.cwd(), 'routes', 'index.js'), 'utf8');
+    assert.match(routes, /router\.post\('\/api\/internal\/budget\/reset', requireAuth, requireAdmin, resetBudgetController\)/);
   });
 
   test('returns a budget snapshot, breaker state and fresh-usage view', () => {
@@ -23,8 +29,48 @@ describe('budget endpoint', () => {
     assert.equal(typeof body.breaker.bitquery, 'boolean');
     assert.equal(typeof body.breaker.dexscreener, 'boolean');
     assert.equal(typeof body.breaker.authBlockedUntil, 'number');
+    assert.equal(typeof body.breaker.quotaBlockedUntil, 'number');
+    assert.equal(typeof body.breaker.dexQuotaBlockedUntil, 'number');
     assert.ok(Array.isArray(body.activeMints));
     assert.equal(typeof body.feeds, 'object');
+  });
+
+  test('reset controller clears an open auth block so traffic resumes without restart', async () => {
+    let calls = 0;
+    let healthy = false;
+    dl.initDataLayer({
+      bitqueryResolver: async () => {
+        calls += 1;
+        if (!healthy) return { error: 'Unauthorized', status: 401 };
+        return { data: { ok: true } };
+      },
+    });
+    const origError = console.error;
+    console.error = () => {};
+    try {
+      await dl.bitquery('{ q }', 't', { feed: 'resetTest' });
+      assert.ok(dl.internals.authOpenUntil() > Date.now());
+      const blocked = await dl.bitquery('{ q }', 't', { feed: 'resetTest' });
+      assert.match(blocked.error, /breaker/);
+      assert.equal(calls, 1);
+
+      let body;
+      resetBudgetController({}, { json: (b) => { body = b; } });
+      assert.equal(body.ok, true);
+      assert.equal(body.authBlockedUntil, 0);
+      assert.equal(body.quotaBlockedUntil, 0);
+      assert.equal(body.dexQuotaBlockedUntil, 0);
+      assert.equal(dl.internals.authOpenUntil(), 0);
+
+      healthy = true;
+      const resumed = await dl.bitquery('{ q }', 't', { feed: 'resetTest' });
+      assert.equal(resumed.stale, false);
+      assert.equal(calls, 2);
+    } finally {
+      console.error = origError;
+      dl.resetCacheState();
+      budget.reset();
+    }
   });
 
   test('budget snapshot reflects a recorded call for the current day', () => {
