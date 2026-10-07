@@ -1,13 +1,17 @@
-import { graphql as providerGraphql, provider as dataProvider } from '../../providers/index.js';
+import { provider as dataProvider } from '../../providers/index.js';
+import dl from '../../providers/dataLayer.js';
 
-const SOL_MINT = 'So11111111111111111111111111111111111111112';
+const FEED = 'tokenDetail';
 
-async function gql(query, label = '') {
-  return providerGraphql(query, label);
+// Provider queries flow through the data layer: budget gate, token bucket,
+// circuit breaker, retry/backoff and per-query negative caching of permanent
+// client errors (e.g. malformed mint addresses). Errors are thrown upward so
+// the dl.fetch wrapper can serve stale or { unavailable }.
+async function dlBq(query, label) {
+  const res = await dl.bitquery(query, label, { feed: FEED, priority: 'user' });
+  if (res.error) throw new Error(res.error);
+  return res;
 }
-
-const cache = new Map();
-const CACHE_TTL = 45_000;
 
 async function fetchTrades(mint, limit = 50) {
   const query = `{
@@ -30,8 +34,7 @@ async function fetchTrades(mint, limit = 50) {
       }
     }
   }`;
-  const { error, data } = await gql(query, ':trades');
-  if (error) return [];
+  const { data } = await dlBq(query, ':trades');
 
   return (data?.Solana?.DEXTradeByTokens || []).map(t => ({
     time: t.Block?.Time,
@@ -64,8 +67,7 @@ async function fetchParticipants(mint, limit = 50) {
       }
     }
   }`;
-  const { error, data } = await gql(query, ':participants');
-  if (error) return [];
+  const { data } = await dlBq(query, ':participants');
 
   const byWallet = new Map();
   for (const t of data?.Solana?.DEXTradeByTokens || []) {
@@ -113,8 +115,7 @@ async function fetchHolders(mint, limit = 50) {
       }
     }
   }`;
-  const { error, data } = await gql(query, ':holders');
-  if (error) return [];
+  const { data } = await dlBq(query, ':holders');
 
   const balances = new Map();
   for (const row of data?.Solana?.BalanceUpdates || []) {
@@ -152,8 +153,7 @@ async function fetchFirstBuyers(mint, limit = 100) {
       }
     }
   }`;
-  const { error, data } = await gql(query, ':firstBuyers');
-  if (error) return [];
+  const { data } = await dlBq(query, ':firstBuyers');
 
   const seen = new Set();
   const buyers = [];
@@ -215,8 +215,7 @@ async function fetchTokenStats(mint) {
       }
     }
   }`;
-  const { error, data } = await gql(query, ':stats');
-  if (error) return null;
+  const { data } = await dlBq(query, ':stats');
 
   const t24 = data?.Solana?.trades24h?.[0];
   const t1h = data?.Solana?.trades1h?.[0];
@@ -244,47 +243,69 @@ async function fetchTokenStats(mint) {
   };
 }
 
+async function buildTab(tab, mint, limit) {
+  let data;
+  switch (tab) {
+    case 'trades':
+      data = await fetchTrades(mint, limit);
+      break;
+    case 'participants':
+      data = await fetchParticipants(mint, limit);
+      break;
+    case 'holders':
+      data = await fetchHolders(mint, limit);
+      break;
+    case 'first-buyers':
+      data = await fetchFirstBuyers(mint, limit);
+      break;
+    case 'stats':
+      data = await fetchTokenStats(mint);
+      break;
+    default:
+      throw new Error('Invalid tab: ' + tab);
+  }
+
+  return {
+    data,
+    meta: { mint, tab, count: Array.isArray(data) ? data.length : 1, source: dataProvider, fetchedAt: new Date().toISOString() },
+  };
+}
+
+const TABS = new Set(['trades', 'participants', 'holders', 'first-buyers', 'stats']);
+
 export async function getTokenDetailController(req, res, next) {
+  const { mint } = req.params;
+  const tab = req.query.tab || 'trades';
+  const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 200);
+
+  if (!TABS.has(tab)) {
+    return res.status(400).json({ error: `Invalid tab: ${tab}` });
+  }
+
   try {
-    const { mint } = req.params;
-    const tab = req.query.tab || 'trades';
-    const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 200);
-    const cacheKey = `detail:${mint}:${tab}:${limit}`;
+    const out = await dl.fetch({
+      key: `detail:${mint}:${tab}:${limit}`,
+      feed: FEED,
+      priority: 'user',
+      freshTtlMs: 45_000,
+      request: () => buildTab(tab, mint, limit),
+    });
 
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      return res.json(cached.data);
+    if (out.unavailable) {
+      return res.status(503).json({
+        error: 'upstream_unavailable',
+        message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
+      });
     }
 
-    let data;
-    switch (tab) {
-      case 'trades':
-        data = await fetchTrades(mint, limit);
-        break;
-      case 'participants':
-        data = await fetchParticipants(mint, limit);
-        break;
-      case 'holders':
-        data = await fetchHolders(mint, limit);
-        break;
-      case 'first-buyers':
-        data = await fetchFirstBuyers(mint, limit);
-        break;
-      case 'stats':
-        data = await fetchTokenStats(mint);
-        break;
-      default:
-        return res.status(400).json({ error: `Invalid tab: ${tab}` });
-    }
-
-    const response = {
-      data,
-      meta: { mint, tab, count: Array.isArray(data) ? data.length : 1, source: dataProvider, fetchedAt: new Date().toISOString() },
-    };
-
-    cache.set(cacheKey, { data: response, ts: Date.now() });
+    const response = out.data;
+    if (out.stale && response.meta) response.meta.stale = true;
     return res.json(response);
   } catch (exc) {
-    return next(exc);
+    console.error('[tokenDetail] handler error:', exc && exc.message ? exc.message : exc);
+    return res.status(502).json({
+      error: 'upstream_unavailable',
+      message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
+    });
   }
 }
