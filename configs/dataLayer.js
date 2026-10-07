@@ -46,14 +46,18 @@ export const dataLayerConfig = {
   bitqueryRatePerMin: num('DL_BITQUERY_RATE_PER_MIN', 70),
   dexRatePerMin: num('DL_DEX_RATE_PER_MIN', 250),
 
-  // Request transport
-  requestTimeoutMs: num('DL_REQUEST_TIMEOUT_MS', 30_000),
+  // Request transport. The heaviest approved analytical builds scan tens of
+  // thousands of trade rows (perBuildGql: smartMoney/historical/formation/
+  // cluster), so a single query can legitimately take well over 30s when it
+  // queues behind the concurrency/budget gates. 120s covers the longest such
+  // turn while the budget gate keeps total spend bounded.
+  requestTimeoutMs: num('DL_REQUEST_TIMEOUT_MS', 120_000),
   retryMax: num('DL_RETRY_MAX', 3),
   retryBaseMs: num('DL_RETRY_BASE_MS', 300),
   retryMaxMs: num('DL_RETRY_MAX_MS', 5_000),
 
   // Circuit breaker per provider
-  breakerTimeoutMs: num('DL_BREAKER_TIMEOUT_MS', 30_000),
+  breakerTimeoutMs: num('DL_BREAKER_TIMEOUT_MS', 90_000),
   breakerFailures: num('DL_BREAKER_FAILURE_THRESHOLD', 5), // percentage *10 => opossum uses %; see dataLayer
   breakerQuotaOpenMs: num('DL_QUOTA_OPEN_MS', 15 * 60_000), // long open on 402/quota
 
