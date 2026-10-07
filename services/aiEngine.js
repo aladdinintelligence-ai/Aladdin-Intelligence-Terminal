@@ -121,9 +121,9 @@ function resolveAnalysisIntent(request) {
 }
 
 function datasetFromResult(result) {
-  if (!result) return { columns: [], rows: [], totalRows: 0, displayedRows: 0, availability: 'unavailable' };
+  if (!result) return { columns: [], rows: [], totalRows: 0, displayedRows: 0, availability: 'unavailable', meta: { updatedAt: null, stale: false } };
   if (result.ok === false || !Array.isArray(result.rows)) {
-    return { columns: result.columns || [], rows: [], totalRows: 0, displayedRows: 0, availability: 'unavailable' };
+    return { columns: result.columns || [], rows: [], totalRows: 0, displayedRows: 0, availability: 'unavailable', meta: { updatedAt: null, stale: false } };
   }
   const displayedRows = Math.min(result.rows.length, result.limit || 10);
   return {
@@ -132,6 +132,10 @@ function datasetFromResult(result) {
     totalRows: result.totalRows != null ? result.totalRows : result.rows.length,
     displayedRows,
     availability: result.rows.length ? 'available' : 'unavailable',
+    meta: {
+      updatedAt: result.meta?.updatedAt || null,
+      stale: result.meta?.stale === true,
+    },
   };
 }
 
@@ -342,6 +346,8 @@ function evidenceSnapshot(dataset, plan, request) {
     limitations: dataset.totalRows
       ? ['Live provider data. Correlation does not establish causation.']
       : ['Widen the filter or remove a condition.'],
+    updatedAt: dataset.meta?.updatedAt || null,
+    stale: dataset.meta?.stale === true,
   };
 }
 
@@ -394,10 +400,11 @@ function conversationalAnswer(request, intent) {
     full_query_link: '/queries',
     export_options: [],
     data_details: { evidenceSnapshotId: '', evidenceHash: '', coverage: '', limitations: [] },
-    availability: 'unavailable',
+availability: 'unavailable',
     synthetic: true,
     evidenceSnapshotId: '',
     evidenceHash: '',
+    data_details: { evidenceSnapshotId: '', evidenceHash: '', coverage: '', limitations: [], updatedAt: null, stale: false },
   };
 }
 

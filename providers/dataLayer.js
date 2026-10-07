@@ -250,17 +250,47 @@ function cacheEmpty(query, ttlMs) {
   });
 }
 
+// Per-feed freshness ledger. every bitquery() completion records the state of
+// the attempt so consumers (ask answers, controller metas) can state the real
+// last-confirmed-upstream time and whether the data being served is current or
+// stale, instead of guessing from a has_data flag. `lastGoodByFeed` keeps the
+// newest confirmed-good timestamp; `lastServingByFeed` remembers the most
+// recent attempt so callers know if the current serve is stale.
+const lastGoodByFeed = new Map();
+const lastServingByFeed = new Map();
+
+function finish(feed, res) {
+  const out = { ...res, updatedAt: res.updatedAt || new Date(now()).toISOString(), stale: res.stale === true };
+  if (out.stale === false && typeof out.updatedAt === 'string') {
+    const prev = lastGoodByFeed.get(feed);
+    if (!prev || prev < out.updatedAt) lastGoodByFeed.set(feed, out.updatedAt);
+  }
+  lastServingByFeed.set(feed, { updatedAt: out.updatedAt, stale: out.stale });
+  return out;
+}
+
+// Latest freshness for a feed: `updatedAt` is always the newest confirmed-good
+// timestamp (kept across stale serves) and `stale` says whether the current
+// serving is confirmed or is old/error data. Returns null before the feed has
+// ever resolved once.
+export function lastFreshness(feed = 'data') {
+  const serving = lastServingByFeed.get(feed);
+  const good = lastGoodByFeed.get(feed) || null;
+  if (!serving) return good ? { updatedAt: good, stale: false } : null;
+  return { updatedAt: serving.stale ? good : serving.updatedAt || good, stale: serving.stale };
+}
+
 export async function bitquery(query, label = '', { feed = 'data', priority = 'user', emptyTtlMs, isEmpty } = {}) {
   const started = now();
-  if (!isFeedEnabled(feed)) return { error: 'FEED_DISABLED', status: 503, data: null, feed };
+  if (!isFeedEnabled(feed)) return finish(feed, { error: 'FEED_DISABLED', status: 503, data: null });
   const cached = negativeCacheGet(query);
-  if (cached) return cached;
+  if (cached) return finish(feed, { ...cached, updatedAt: new Date(cached.at).toISOString(), stale: true });
   let attempt = 0;
   for (;;) {
-    if (!budget.canFire()) return { error: 'BUDGET_EXHAUSTED', status: 429, data: null };
-    if (breakerIsOpen(bitqueryBreaker) || now() < quotaOpenUntil || now() < authOpenUntil) return { error: 'bitquery breaker open', status: 503, data: null };
+    if (!budget.canFire()) return finish(feed, { error: 'BUDGET_EXHAUSTED', status: 429, data: null, stale: true });
+    if (breakerIsOpen(bitqueryBreaker) || now() < quotaOpenUntil || now() < authOpenUntil) return finish(feed, { error: 'bitquery breaker open', status: 503, data: null, stale: true });
     await bitqueryBucket.take();
-    if (now() - started > config.requestTimeoutMs) return { error: 'request time budget exceeded', status: 0, data: null };
+    if (now() - started > config.requestTimeoutMs) return finish(feed, { error: 'request time budget exceeded', status: 0, data: null, stale: true });
     let res;
     try {
       res = await bitqueryBreaker.fire(query, label, { feed, priority });
@@ -271,31 +301,31 @@ export async function bitquery(query, label = '', { feed = 'data', priority = 'u
     if (res.kind === 'quota') {
       quotaOpenUntil = now() + config.breakerQuotaOpenMs;
       console.log(`[DATA] bitquery quota hit (${label}): blocking upstream for ${config.breakerQuotaOpenMs}ms`);
-      return { error: res.error, status: 402, data: null };
+      return finish(feed, { error: res.error, status: 402, data: null, stale: true });
     }
     if (res.kind === 'auth') {
       // Credential rejection: do not retry, do not negative-cache, open a long
       // manual block, and log loudly so ops sees the key is being turned away.
       authOpenUntil = now() + config.authBreakerOpenMs;
       console.error(`[DATA] bitquery AUTH failure (${label}): ${res.error} — blocking upstream for ${config.authBreakerOpenMs}ms`);
-      return { error: res.error, status: 401, data: null };
+      return finish(feed, { error: res.error, status: 401, data: null, stale: true });
     }
     if (res.kind === 'client') {
       // Permanent for this query (bad syntax, forbidden dataset/plan):
       // negative-cache it (~10 min) so identical lookups spend no calls.
       negativeCacheSet(query, res);
-      return { error: res.error, status: res.status || 400, data: null };
+      return finish(feed, { error: res.error, status: res.status || 400, data: null, stale: true });
     }
     if (!res.error) {
       if (isEmpty && isEmpty(res.data)) {
         cacheEmpty(query, emptyTtlMs);
-        return { status: 200, data: null, empty: true, cached: false };
+        return finish(feed, { status: 200, data: null, empty: true, cached: false, stale: true });
       }
-      return res;
+      return finish(feed, { ...res, stale: false });
     }
     attempt += 1;
-    if (attempt >= config.retryMax) return res;
-    if (now() - started > config.requestTimeoutMs) return res;
+    if (attempt >= config.retryMax) return finish(feed, { ...res, stale: true });
+    if (now() - started > config.requestTimeoutMs) return finish(feed, { ...res, stale: true });
     await sleep(backoffMs(attempt - 1, res.retryAfterMs || null));
   }
 }
@@ -575,6 +605,8 @@ export function resetCacheState() {
   mintActivity.clear();
   lastRefresh.clear();
   negativeCache.clear();
+  lastGoodByFeed.clear();
+  lastServingByFeed.clear();
   tokenBucketEnabled = true;
   bitqueryBucket.reset();
   dexBucket.reset();
@@ -619,5 +651,6 @@ export default {
   resetCacheState,
   setTokenBucketEnabled,
   isFeedEnabled,
+  lastFreshness,
   budget,
 };

@@ -307,6 +307,54 @@ describe('demand-driven hotness', () => {
   });
 });
 
+describe('freshness metadata', () => {
+  test('success carries updatedAt with stale=false and is recorded as lastGood', async () => {
+    let calls = 0;
+    initDataLayer({
+      bitqueryResolver: async () => { calls += 1; return { data: { ok: true } }; },
+    });
+    const res = await bitquery('{ ok }', 't', { feed: 'fl' });
+    assert.equal(res.stale, false);
+    assert.match(res.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
+    const f = dl.lastFreshness('fl');
+    assert.equal(f.stale, false);
+    assert.equal(f.updatedAt, res.updatedAt);
+  });
+
+  test('cached-empty repeat is stale and keeps the recorded time', async () => {
+    let calls = 0;
+    const isEmpty = (d) => !(d && d.Solana && d.Solana.DEXTradeByTokens && d.Solana.DEXTradeByTokens.length);
+    initDataLayer({
+      bitqueryResolver: async () => { calls += 1; return { data: { Solana: { DEXTradeByTokens: [] } } }; },
+    });
+    const first = await bitquery('{ empty2 }', 't', { feed: 'fl', emptyTtlMs: 60_000, isEmpty });
+    assert.equal(first.stale, true);
+    const second = await bitquery('{ empty2 }', 't', { feed: 'fl', emptyTtlMs: 60_000, isEmpty });
+    assert.equal(second.stale, true);
+    assert.match(second.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(second.updatedAt, new Date(second.at).toISOString());
+    assert.equal(calls, 1);
+  });
+
+  test('auth failure marks the feed stale and retries keep the last confirmed time', async () => {
+    let calls = 0;
+    initDataLayer({
+      bitqueryResolver: async () => {
+        calls += 1;
+        if (calls === 1) return { data: { ok: true } };
+        return { error: 'Unauthorized', status: 401 };
+      },
+    });
+    const good = await bitquery('{ ok }', 't', { feed: 'fl2' });
+    assert.equal(good.stale, false);
+    const bad = await bitquery('{ ok }', 't', { feed: 'fl2' });
+    assert.equal(bad.stale, true);
+    const f = dl.lastFreshness('fl2');
+    assert.equal(f.stale, true);
+    assert.equal(f.updatedAt, good.updatedAt);
+  });
+});
+
 describe('feed scheduler', () => {
   test('hot feed refreshes, cold feed stays idle', async () => {
     let hotRuns = 0;

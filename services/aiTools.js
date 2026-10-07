@@ -155,32 +155,39 @@ async function fetchFeed(tab, limit = 10) {
   const fetcher = fetchers[tab] || fetchNewTokens;
   const result = await fetcher(limit);
   if (result.error) throw new Error(result.error);
-  return result.tokens || [];
+  return { tokens: result.tokens || [], freshness: dl.lastFreshness('launches') || null };
 }
 
 async function fetchMoverFeed(limit = 10) {
   const result = await fetchMovers(limit);
   if (result.error) throw new Error(result.error);
-  return (result.tokens || []).map((t) => ({
-    ...t,
-    marketCapUsd: t.mc ?? t.marketCapUsd,
-  }));
+  return {
+    tokens: (result.tokens || []).map((t) => ({
+      ...t,
+      marketCapUsd: t.mc ?? t.marketCapUsd,
+    })),
+    freshness: dl.lastFreshness('movers') || null,
+  };
 }
 
 async function bestEffortTokens(mint) {
   const results = await Promise.allSettled([fetchMoverFeed(20), fetchFeed('new', 20), fetchFeed('trending', 20)]);
   const merged = new Map();
+  const freshnessByMint = new Map();
   for (const result of results) {
     if (result.status !== 'fulfilled') continue;
-    for (const t of result.value || []) {
-      if (t.mint) merged.set(t.mint, t);
+    const { tokens, freshness } = result.value || {};
+    for (const t of tokens || []) {
+      if (!t.mint) continue;
+      merged.set(t.mint, t);
+      if (!freshnessByMint.has(t.mint)) freshnessByMint.set(t.mint, freshness);
     }
   }
   if (mint) {
     const match = [...merged.values()].find((t) => t.mint === mint) || null;
-    if (match) return match;
+    if (match) return { tok: match, meta: freshnessByMint.get(mint) || null };
   }
-  return null;
+  return { tok: null, meta: null };
 }
 
 export async function resolveMintFromQuestion(question) {
@@ -230,8 +237,10 @@ export async function resolveTokenBySymbol(symbol) {
   const token = await Token.findOne({ symbol: r }).lean();
   if (token) return token;
   const feed = await bestEffortTokens();
-  const hit = (feed ? [feed] : []).concat([]).find((t) => (t.symbol || '').toUpperCase() === r);
-  if (hit) return { _id: hit.mint, symbol: hit.symbol, name: hit.name, marketCapUsd: hit.marketCapUsd ? Number(hit.marketCapUsd) : null };
+  const hit = feed?.tok || null;
+  if (hit && (hit.symbol || '').toUpperCase() === r) {
+    return { _id: hit.mint, symbol: hit.symbol, name: hit.name, marketCapUsd: hit.marketCapUsd ? Number(hit.marketCapUsd) : null };
+  }
   return null;
 }
 
@@ -258,7 +267,8 @@ export async function runTool(toolName, params = {}) {
 
 export async function getMovers(limit = 10) {
   try {
-    const raw = await cached(`movers:${limit}`, () => fetchMoverFeed(limit));
+    const feed = await cached(`movers:${limit}`, () => fetchMoverFeed(limit));
+    const raw = feed.tokens;
     if (!raw.length) return { ok: false, error: 'No mover records available' };
     const mapped = raw.map((t) => ({
       ...t,
@@ -269,7 +279,8 @@ export async function getMovers(limit = 10) {
       formation: t.formation || classifyFormation(t),
     }));
     const rows = tokenFeedRows(mapped);
-    return { ok: true, columns: tokenColumns, rows, totalRows: rows.length, meta: { source: `${dataProvider}+dexscreener`, tool: 'get_movers' } };
+    const freshness = feed.freshness || null;
+    return { ok: true, columns: tokenColumns, rows, totalRows: rows.length, meta: { source: `${dataProvider}+dexscreener`, tool: 'get_movers', updatedAt: freshness ? freshness.updatedAt : null, stale: freshness ? freshness.stale : false } };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -277,10 +288,12 @@ export async function getMovers(limit = 10) {
 
 export async function getLaunches(tab = 'new', limit = 10) {
   try {
-    const raw = await cached(`launches:${tab}:${limit}`, () => fetchFeed(tab, limit));
+    const feed = await cached(`launches:${tab}:${limit}`, () => fetchFeed(tab, limit));
+    const raw = feed.tokens;
     if (!raw.length) return { ok: false, error: `No ${tab} launch records available` };
     const rows = tokenFeedRows(raw);
-    return { ok: true, columns: tokenColumns, rows, totalRows: rows.length, meta: { source: dataProvider, tab, tool: 'get_launches' } };
+    const freshness = feed.freshness || null;
+    return { ok: true, columns: tokenColumns, rows, totalRows: rows.length, meta: { source: dataProvider, tab, tool: 'get_launches', updatedAt: freshness ? freshness.updatedAt : null, stale: freshness ? freshness.stale : false } };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -290,7 +303,7 @@ export async function getTokenDetail(mint) {
   try {
     const fromFeed = await bestEffortTokens(mint);
     const fromDb = await lookUpToken(mint);
-    const t = fromFeed || fromDb || null;
+    const t = fromFeed?.tok || fromDb || null;
     if (!t) return { ok: false, error: 'token not found' };
 
     const marketCap = nullOr(formatUsd(t.marketCapUsd != null ? t.marketCapUsd : (fromDb?.marketCapUsd ?? null)));
@@ -321,7 +334,12 @@ export async function getTokenDetail(mint) {
       columns: tokenColumns,
       rows: [row],
       totalRows: 1,
-      meta: { source: fromFeed ? `${dataProvider}+dexscreener` : 'canonical_mongodb', tool: 'get_token_detail' },
+      meta: {
+        source: fromFeed?.tok ? `${dataProvider}+dexscreener` : 'canonical_mongodb',
+        tool: 'get_token_detail',
+        updatedAt: fromFeed?.meta?.updatedAt || null,
+        stale: fromFeed?.meta?.stale === true,
+      },
       entity: { mint, symbol: t.symbol || null, name: t.name || null },
     };
   } catch (err) {
