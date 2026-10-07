@@ -59,7 +59,11 @@ function gqlStr(arr) {
 }
 
 function sinceIso(hours) {
-  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  // Defensive: a bad window (e.g. an options object in this arg position)
+  // must degrade to 1h, never crash the feed with "Invalid time value".
+  const h = Number(hours);
+  const safeHours = Number.isFinite(h) && h > 0 ? h : 1;
+  return new Date(Date.now() - safeHours * 60 * 60 * 1000).toISOString();
 }
 
 function calcBonding(basePostAmount) {
@@ -436,7 +440,10 @@ export async function fetchMigratedTokens(limit = 50, { feed = 'launches', prior
   return { error: null, tokens };
 }
 
-export async function fetchTrendingTokens(limit = 50, hours = 1, { feed = 'launches', priority = 'user' } = {}) {
+// Signature matches the other launches fetchers: (limit, { hours, feed,
+// priority }) — see bitquery.js for the rationale (positional hours made
+// `fetcher(limit, FETCH_OPTS)` crash with "Invalid time value").
+export async function fetchTrendingTokens(limit = 50, { hours = 1, feed = 'launches', priority = 'user' } = {}) {
   const since = sinceIso(hours);
 
   const volQuery = `{

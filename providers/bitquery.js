@@ -63,7 +63,12 @@ function gqlStr(arr) {
 }
 
 function sinceIso(hours) {
-  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  // Defensive: callers pass an options object through this arg position when
+  // signatures drift; a bad window must degrade to 1h, never crash the feed
+  // with RangeError: Invalid time value.
+  const h = Number(hours);
+  const safeHours = Number.isFinite(h) && h > 0 ? h : 1;
+  return new Date(Date.now() - safeHours * 60 * 60 * 1000).toISOString();
 }
 
 function calcBonding(basePostAmount) {
@@ -454,7 +459,11 @@ export async function fetchMigratedTokens(limit = 50, { feed = 'launches', prior
   return { error: null, tokens };
 }
 
-export async function fetchTrendingTokens(limit = 50, hours = 1, { feed = 'launches', priority = 'user' } = {}) {
+// Signature matches the other launches fetchers: (limit, { hours, feed,
+// priority }). The previous positional (limit, hours, opts) shape made
+// `fetcher(limit, FETCH_OPTS)` in launchesController pass the options object
+// as `hours`, which crashed the trending tab with "Invalid time value".
+export async function fetchTrendingTokens(limit = 50, { hours = 1, feed = 'launches', priority = 'user' } = {}) {
   const since = sinceIso(hours);
 
   // Rank directly by summed volume within the time window rather than by
