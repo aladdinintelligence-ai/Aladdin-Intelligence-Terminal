@@ -85,6 +85,11 @@ export const dataLayerConfig = {
   detailOnDemandFreshTtlMs: num('TD_ONDEMAND_FRESH_TTL_MS', 30 * 60_000),
   detailStaleTtlMs: num('TD_STALE_TTL_MS', 3 * 60 * 60_000),
   detailEmptyTtlMs: num('TD_EMPTY_TTL_MS', 5 * 60_000),
+  // Cold token-detail builds (cache misses that spend an upstream Bitquery
+  // call) are capped per user and per IP so mint-scraping cannot drain the
+  // budget. Warm/cached polls are never counted.
+  detailColdBuildRatePerMin: num('TD_COLD_RATE_PER_MIN', 20),
+  detailColdBuildWindowMs: num('TD_COLD_RATE_WINDOW_MS', 60_000),
 
   // Feeds disabled at the source (e.g. OHLC chart while the query needs a
   // dataset tier the current plan forbids). Comma-separated feed names.

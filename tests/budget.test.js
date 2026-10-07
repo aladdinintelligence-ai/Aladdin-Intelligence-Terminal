@@ -10,7 +10,7 @@ import { budget } from '../providers/budgetTracker.js';
 describe('budget endpoint', () => {
   test('registers /api/internal/budget behind requireAuth + requireAdmin on the router', () => {
     const routes = readFileSync(join(process.cwd(), 'routes', 'index.js'), 'utf8');
-    assert.match(routes, /import \{ requireAuth, requireAdmin \}/);
+    assert.match(routes, /import \{[^}]*\brequireAdmin\b[^}]*\} from '\.\.\/middleware\/auth\.js'/);
     assert.match(routes, /router\.get\('\/api\/internal\/budget', requireAuth, requireAdmin, getBudgetController\)/);
   });
 

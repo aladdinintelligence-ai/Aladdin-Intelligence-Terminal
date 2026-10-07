@@ -29,6 +29,12 @@ import budget from './providers/budgetTracker.js';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Behind the deploy load balancer req.ip (per-IP cold-build cap) must resolve
+// to the client, not the proxy: trust 1 hop by default. TRUST_PROXY_HOPS=0 if
+// the app is exposed directly, 2 if two proxies sit in front (e.g. CDN + LB).
+const trustHops = Number.parseInt(process.env.TRUST_PROXY_HOPS || '1', 10);
+app.set('trust proxy', Number.isFinite(trustHops) && trustHops >= 0 ? trustHops : 1);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use(cors({

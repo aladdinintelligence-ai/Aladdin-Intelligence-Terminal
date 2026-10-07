@@ -40,6 +40,11 @@ describe('config defaults', () => {
     assert.equal(config.demandDriven, true);
     assert.equal(config.dailyCapOverride, 0);
   });
+
+  test('cold token-detail build caps default to 20/minute', () => {
+    assert.equal(config.detailColdBuildRatePerMin, 20);
+    assert.equal(config.detailColdBuildWindowMs, 60_000);
+  });
 });
 
 describe('budget tracker', () => {

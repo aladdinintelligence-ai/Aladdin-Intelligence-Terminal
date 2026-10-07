@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { tokensController, internalController, healthController, launchesController, moversController, ogController, smartMoneyController, formationController, insiderController, clusterController, historicalController } from '../controllers/index.js';
-import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { requireAuth, requireAdmin, optionalAuth } from '../middleware/auth.js';
 import swapRouter from './swap.js';
 import askRouter from './ask.js';
 import { getTokenInfoController } from '../controllers/token/tokenInfoController.js';
@@ -18,7 +18,9 @@ router.use(askRouter);
 
 router.get('/api/token-info/:mint', getTokenInfoController);
 router.get('/api/token-chart/:mint', getTokenChartController);
-router.get('/api/token-detail/:mint', getTokenDetailController);
+// optionalAuth: the route stays public, but a signed-in caller gets req.user
+// so the cold-build limiter can apply its per-user window.
+router.get('/api/token-detail/:mint', optionalAuth, getTokenDetailController);
 router.get('/api/launches', launchesController.getLaunchesController);
 router.get('/api/movers', moversController.getMoversController);
 router.get('/api/og', ogController.getOgController);

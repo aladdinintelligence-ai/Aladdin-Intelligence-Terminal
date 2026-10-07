@@ -4,19 +4,16 @@ import { generateJWT, shouldRefreshJWT } from '../services/authService.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'aladdin-dev-secret-change-in-production';
 
+// Bearer header first (mobile/3rd-party clients), then the browser cookie.
+function readToken(req) {
+  const header = req.headers && req.headers.authorization;
+  if (header && header.startsWith('Bearer ')) return header.slice(7);
+  if (req.cookies && req.cookies.token) return req.cookies.token;
+  return null;
+}
+
 export function requireAuth(req, res, next) {
-  let token = null;
-
-  // Try Authorization header first (for mobile/3rd-party clients)
-  const header = req.headers.authorization;
-  if (header && header.startsWith('Bearer ')) {
-    token = header.slice(7);
-  }
-
-  // Fall back to cookie (for browser clients)
-  if (!token && req.cookies?.token) {
-    token = req.cookies.token;
-  }
+  const token = readToken(req);
 
   if (!token) {
     // Distinguish "no credential reached us" from "credential was rejected".
@@ -69,6 +66,22 @@ export function requireAdmin(req, res, next) {
   const userId = req.user && req.user.userId;
   if (!userId || !admins.includes(userId)) {
     return res.status(403).json({ error: 'Admin access required' });
+  }
+  return next();
+}
+
+// Populates req.user when a valid token IS present, but never rejects the
+// request — used on public routes (token-detail) so the cold-build limiter can
+// apply a per-user window to signed-in callers while anonymous traffic falls
+// back to the per-IP window. Invalid/expired tokens are treated as anonymous.
+export function optionalAuth(req, _res, next) {
+  const token = readToken(req);
+  if (!token) return next();
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.user = { userId: payload.userId };
+  } catch {
+    /* anonymous */
   }
   return next();
 }

@@ -588,6 +588,17 @@ export function stopScheduler() {
   schedulerTimer = null;
 }
 
+// Cache probes for controllers: a request whose key is neither cached nor
+// already building would spend an upstream call (a "cold build"), which is the
+// only thing worth rate limiting.
+export function hasCached(key) {
+  return cache.has(key);
+}
+
+export function hasInflight(key) {
+  return inflight.has(key);
+}
+
 export function getState() {
   return {
     hotness: [...hotness.entries()].map(([k, ts]) => [k, ts]),
@@ -648,6 +659,8 @@ export default {
   startScheduler,
   stopScheduler,
   getState,
+  hasCached,
+  hasInflight,
   resetCacheState,
   setTokenBucketEnabled,
   isFeedEnabled,

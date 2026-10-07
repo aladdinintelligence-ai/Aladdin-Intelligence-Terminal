@@ -1,6 +1,7 @@
 import { provider as dataProvider } from '../../providers/index.js';
 import config from '../../configs/dataLayer.js';
 import dl from '../../providers/dataLayer.js';
+import coldBuildLimiter from '../../services/coldBuildLimiter.js';
 
 // ---- tokenDetail watch budget (approved plan) ----
 // Actively-watched mints (top `detailHotMintCap`) are refreshed ONLY by an
@@ -389,8 +390,28 @@ export async function getTokenDetailController(req, res, next) {
         ? config.detailColdFreshTtlMs
         : config.detailOnDemandFreshTtlMs;
 
+    const key = `detail:${mint}:${tab}`;
+
+    // Cold gate: only a request that would spend an upstream Bitquery call
+    // (key neither cached nor already building) is rate limited, per user and
+    // per IP (TD_COLD_RATE_PER_MIN / TD_COLD_RATE_WINDOW_MS). Cached/warm
+    // polls stay unbounded and an in-flight build of this exact key is joined
+    // for free. Over the limit: cached data is still served by dl.fetch when
+    // it exists; with nothing cached the answer is 429.
+    if (!dl.hasCached(key) && !dl.hasInflight(key)) {
+      const verdict = coldBuildLimiter.take(req.user && req.user.userId, req.ip || (req.socket && req.socket.remoteAddress));
+      if (!verdict.allowed) {
+        res.setHeader('Retry-After', String(verdict.retryAfter));
+        return res.status(429).json({
+          error: 'rate_limited',
+          reason: verdict.reason,
+          message: `Cold token lookups are limited to ${config.detailColdBuildRatePerMin} per minute. Please retry in ${verdict.retryAfter}s.`,
+        });
+      }
+    }
+
     const out = await dl.fetch({
-      key: `detail:${mint}:${tab}`,
+      key,
       feed: FEED,
       priority: 'user',
       freshTtlMs: freshMs,
