@@ -1,9 +1,5 @@
-import axios from 'axios';
-import { graphql as providerGraphql, provider as dataProvider } from '../../providers/index.js';
-
-const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex/tokens';
-const cache = new Map();
-const CACHE_TTL = 120_000;
+import { provider as dataProvider } from '../../providers/index.js';
+import dl from '../../providers/dataLayer.js';
 
 // Candidate pool: top tokens by 7d volume, then market-quality thresholds.
 const CANDIDATE_LIMIT = 200;
@@ -12,9 +8,15 @@ const OG_LIQ_MIN = 25_000;
 const MIN_AGE_DAYS = 3;
 const ESTABLISHED_AGE_DAYS = 14;
 
-function isQuotaError(err) {
-  const message = err?.message || '';
-  return message.includes('402') || /quota|points limit|rate limit/i.test(message);
+const DEX_BATCH = { feed: 'og' };
+
+// Provider queries flow through the data layer: budget gate, token bucket,
+// circuit breaker and retry/backoff are all handled there. Errors are
+// thrown upward so the dl.fetch wrapper can serve stale or { unavailable }.
+async function dlBq(query, label) {
+  const res = await dl.bitquery(query, label, { feed: 'og', priority: 'user' });
+  if (res.error) throw new Error(res.error);
+  return res;
 }
 
 function generateColor(mint) {
@@ -101,9 +103,7 @@ async function fetchVolumeLeaders() {
     + '      }\n'
     + '    }';
 
-  const { error, data } = await gqlWithRetry(query, ':og:leaders');
-  if (error) throw new Error(error);
-
+  const { data } = await dlBq(query, ':og:leaders');
   const leaders = [];
   const seen = new Set();
   for (const row of (data && data.Solana && data.Solana.trades) || []) {
@@ -121,24 +121,16 @@ async function fetchVolumeLeaders() {
 }
 
 // Keep every pair per mint so age comes from the oldest pool (token launch)
-// and market metrics from the deepest pool.
+// and market metrics from the deepest pool. Routed through dl.dexBatch so
+// DexScreener traffic honors the budget bucket / breaker like provider calls.
 async function fetchPairsByMint(mints) {
+  const res = await dl.dexBatch(mints, DEX_BATCH);
+  if (res.error) throw new Error(res.error);
   const pairsByMint = new Map();
-  const chunks = [];
-  for (let i = 0; i < mints.length; i += 30) chunks.push(mints.slice(i, i + 30));
-  await Promise.all(chunks.slice(0, 8).map(async function (batch) {
-    try {
-      const { data } = await axios.get(DEXSCREENER_API + '/' + batch.join(','), { timeout: 10000 });
-      for (const pair of (data && data.pairs) || []) {
-        const addr = pair && pair.baseToken && pair.baseToken.address;
-        if (!addr) continue;
-        if (!pairsByMint.has(addr)) pairsByMint.set(addr, []);
-        pairsByMint.get(addr).push(pair);
-      }
-    } catch (err) {
-      console.error('[og] DexScreener fetch failed:', err.message);
-    }
-  }));
+  for (const mint of mints) {
+    const pairs = (res[mint] || []).filter(p => p && p.baseToken && p.baseToken.address === mint);
+    if (pairs.length) pairsByMint.set(mint, pairs);
+  }
   return pairsByMint;
 }
 
@@ -167,17 +159,6 @@ function pickMarket(pairs) {
 // account (holder count + top-10 share) and distinct 24h buyers. limitBy
 // keeps one row per account so counts are not diluted by churn, and one
 // window per subject keeps the whole shortlist to a single round-trip.
-async function gqlWithRetry(query, label, attempts = 2) {
-  let result = await providerGraphql(query, label);
-  for (let attempt = 1; attempt < attempts; attempt++) {
-    const transient = result.error && /socket|aborted|timeout|hang up|ECONNRESET|408/i.test(result.error);
-    if (!transient) break;
-    await new Promise(function (resolve) { setTimeout(resolve, 900); });
-    result = await providerGraphql(query, label);
-  }
-  return result;
-}
-
 async function fetchOwnershipAndBuyers(mints) {
   const result = { holders: new Map(), top10: new Map(), buyers: new Map(), error: null };
   if (mints.length === 0) return result;
@@ -222,10 +203,12 @@ async function fetchOwnershipAndBuyers(mints) {
     }
   }`;
 
-  const [holdersRes, buysRes] = await Promise.all([
-    gqlWithRetry(holdersQuery, ':og:holders'),
-    gqlWithRetry(buysQuery, ':og:buyers'),
+  const pair = await Promise.allSettled([
+    dlBq(holdersQuery, ':og:holders'),
+    dlBq(buysQuery, ':og:buyers'),
   ]);
+  const holdersRes = { error: pair[0].status === 'fulfilled' ? null : pair[0].reason.message, data: pair[0].status === 'fulfilled' ? pair[0].value.data : null };
+  const buysRes = { error: pair[1].status === 'fulfilled' ? null : pair[1].reason.message, data: pair[1].status === 'fulfilled' ? pair[1].value.data : null };
 
   if (holdersRes.error) {
     result.error = holdersRes.error;
@@ -278,148 +261,130 @@ function buildMeta(count, coverage) {
 }
 
 async function buildOgResponse(limit) {
-  const cacheKey = 'og:' + limit;
-
-  try {
-    const leaders = await fetchVolumeLeaders();
-    if (leaders.length === 0) {
-      const empty = { data: [], meta: buildMeta(0, 'No established tokens matched the current market thresholds.') };
-      cache.set(cacheKey, { data: empty, ts: Date.now() });
-      return empty;
-    }
-
-    const pairsByMint = await fetchPairsByMint(leaders.map(function (t) { return t.mint; }));
-
-    const pool = [];
-    for (const leader of leaders) {
-      const pairs = pairsByMint.get(leader.mint);
-      if (!pairs || pairs.length === 0) continue;
-      const market = pickMarket(pairs);
-      const age = ageDaysFrom(market.launchedAt);
-      if (age == null || age < MIN_AGE_DAYS) continue;
-      if (market.marketCapUsd < OG_MC_MIN || market.liquidityUsd < OG_LIQ_MIN) continue;
-      pool.push({
-        mint: leader.mint,
-        symbol: market.symbol || leader.symbol || leader.mint.slice(0, 6).toUpperCase(),
-        name: market.name || leader.name || 'Unknown',
-        ageDays: age,
-        mc: market.marketCapUsd,
-        liquidity: market.liquidityUsd,
-        volume24h: market.volume24h != null ? market.volume24h : 0,
-        change: market.change24h,
-        imageUrl: market.imageUrl,
-        volume7d: leader.volume7d,
-      });
-    }
-
-    // Established tokens lead, but keep a slice of recently launched tokens
-    // so the New filter has rows to show; backfill if either side runs short.
-    const established = pool
-      .filter(function (t) { return t.ageDays >= ESTABLISHED_AGE_DAYS; })
-      .sort(function (a, b) { return b.mc - a.mc; });
-    const young = pool
-      .filter(function (t) { return t.ageDays < ESTABLISHED_AGE_DAYS; })
-      .sort(function (a, b) { return b.mc - a.mc; });
-    const newQuota = Math.min(Math.max(Math.round(limit * 0.3), 2), limit);
-    const selected = established.slice(0, limit - newQuota).concat(young.slice(0, newQuota));
-    const leftovers = established.slice(Math.max(limit - newQuota, 0)).concat(young.slice(newQuota));
-    for (const extra of leftovers) {
-      if (selected.length >= limit) break;
-      selected.push(extra);
-    }
-    selected.sort(function (a, b) { return b.mc - a.mc; });
-    if (selected.length === 0) {
-      const empty = { data: [], meta: buildMeta(0, 'No established tokens matched the current market thresholds.') };
-      cache.set(cacheKey, { data: empty, ts: Date.now() });
-      return empty;
-    }
-
-    const ownership = await fetchOwnershipAndBuyers(selected.map(function (t) { return t.mint; }));
-
-    const rows = selected.map(function (t) {
-      const holders = ownership.holders.has(t.mint) ? ownership.holders.get(t.mint) : 0;
-      const top10 = ownership.top10.has(t.mint) ? ownership.top10.get(t.mint) : 0;
-      const buyers = ownership.buyers.has(t.mint) ? ownership.buyers.get(t.mint) : 0;
-      const change = t.change;
-      const turnover = t.mc > 0 ? t.volume24h / t.mc : 0;
-      const isChanged = (change != null && Math.abs(change) >= 5) || turnover >= 0.3;
-      const highSignal = change != null
-        && ((Math.abs(change) >= 10 && t.volume24h >= 100000) || turnover >= 0.3);
-      const metrics = {
-        mc: t.mc,
-        liquidity: t.liquidity,
-        volume24h: t.volume24h,
-        change: change,
-        top10: top10,
-        buyers: buyers,
-      };
-      return {
-        id: t.mint.slice(0, 8),
-        mint: t.mint,
-        symbol: t.symbol,
-        name: t.name,
-        imageUrl: t.imageUrl,
-        color: generateColor(t.mint),
-        formation: classifyEstablished(metrics),
-        buyers: buyers,
-        mc: t.mc,
-        change: change,
-        liquidity: t.liquidity,
-        volume: t.volume24h,
-        holders: holders,
-        top10: top10,
-        ageDays: t.ageDays,
-        isNew: t.ageDays < ESTABLISHED_AGE_DAYS,
-        isChanged: isChanged,
-        highSignal: highSignal,
-        behaviouralChange: behaviouralChangeText(metrics),
-        whyItMatters: whyItMattersText(metrics),
-      };
-    });
-
-    const coverage = ownership.error
-      ? 'Market data live; holder and buyer metrics temporarily unavailable.'
-      : 'Market cap, liquidity, 24h volume, 24h change and imagery from DexScreener. Token age from earliest indexed pool. Buyers, holder counts and top-10 concentration from on-chain balances (24h window).';
-
-    const response = { data: rows, meta: buildMeta(rows.length, coverage) };
-    cache.set(cacheKey, { data: response, ts: Date.now() });
-    return response;
-  } catch (exc) {
-    cache.delete(cacheKey);
-    throw exc;
+  const leaders = await fetchVolumeLeaders();
+  if (leaders.length === 0) {
+    return { data: [], meta: buildMeta(0, 'No established tokens matched the current market thresholds.') };
   }
+
+  const pairsByMint = await fetchPairsByMint(leaders.map(function (t) { return t.mint; }));
+
+  const pool = [];
+  for (const leader of leaders) {
+    const pairs = pairsByMint.get(leader.mint);
+    if (!pairs || pairs.length === 0) continue;
+    const market = pickMarket(pairs);
+    const age = ageDaysFrom(market.launchedAt);
+    if (age == null || age < MIN_AGE_DAYS) continue;
+    if (market.marketCapUsd < OG_MC_MIN || market.liquidityUsd < OG_LIQ_MIN) continue;
+    pool.push({
+      mint: leader.mint,
+      symbol: market.symbol || leader.symbol || leader.mint.slice(0, 6).toUpperCase(),
+      name: market.name || leader.name || 'Unknown',
+      ageDays: age,
+      mc: market.marketCapUsd,
+      liquidity: market.liquidityUsd,
+      volume24h: market.volume24h != null ? market.volume24h : 0,
+      change: market.change24h,
+      imageUrl: market.imageUrl,
+      volume7d: leader.volume7d,
+    });
+  }
+
+  // Established tokens lead, but keep a slice of recently launched tokens
+  // so the New filter has rows to show; backfill if either side runs short.
+  const established = pool
+    .filter(function (t) { return t.ageDays >= ESTABLISHED_AGE_DAYS; })
+    .sort(function (a, b) { return b.mc - a.mc; });
+  const young = pool
+    .filter(function (t) { return t.ageDays < ESTABLISHED_AGE_DAYS; })
+    .sort(function (a, b) { return b.mc - a.mc; });
+  const newQuota = Math.min(Math.max(Math.round(limit * 0.3), 2), limit);
+  const selected = established.slice(0, limit - newQuota).concat(young.slice(0, newQuota));
+  const leftovers = established.slice(Math.max(limit - newQuota, 0)).concat(young.slice(newQuota));
+  for (const extra of leftovers) {
+    if (selected.length >= limit) break;
+    selected.push(extra);
+  }
+  selected.sort(function (a, b) { return b.mc - a.mc; });
+  if (selected.length === 0) {
+    return { data: [], meta: buildMeta(0, 'No established tokens matched the current market thresholds.') };
+  }
+
+  const ownership = await fetchOwnershipAndBuyers(selected.map(function (t) { return t.mint; }));
+
+  const rows = selected.map(function (t) {
+    const holders = ownership.holders.has(t.mint) ? ownership.holders.get(t.mint) : 0;
+    const top10 = ownership.top10.has(t.mint) ? ownership.top10.get(t.mint) : 0;
+    const buyers = ownership.buyers.has(t.mint) ? ownership.buyers.get(t.mint) : 0;
+    const change = t.change;
+    const turnover = t.mc > 0 ? t.volume24h / t.mc : 0;
+    const isChanged = (change != null && Math.abs(change) >= 5) || turnover >= 0.3;
+    const highSignal = change != null
+      && ((Math.abs(change) >= 10 && t.volume24h >= 100000) || turnover >= 0.3);
+    const metrics = {
+      mc: t.mc,
+      liquidity: t.liquidity,
+      volume24h: t.volume24h,
+      change: change,
+      top10: top10,
+      buyers: buyers,
+    };
+    return {
+      id: t.mint.slice(0, 8),
+      mint: t.mint,
+      symbol: t.symbol,
+      name: t.name,
+      imageUrl: t.imageUrl,
+      color: generateColor(t.mint),
+      formation: classifyEstablished(metrics),
+      buyers: buyers,
+      mc: t.mc,
+      change: change,
+      liquidity: t.liquidity,
+      volume: t.volume24h,
+      holders: holders,
+      top10: top10,
+      ageDays: t.ageDays,
+      isNew: t.ageDays < ESTABLISHED_AGE_DAYS,
+      isChanged: isChanged,
+      highSignal: highSignal,
+      behaviouralChange: behaviouralChangeText(metrics),
+      whyItMatters: whyItMattersText(metrics),
+    };
+  });
+
+  const coverage = ownership.error
+    ? 'Market data live; holder and buyer metrics temporarily unavailable.'
+    : 'Market cap, liquidity, 24h volume, 24h change and imagery from DexScreener. Token age from earliest indexed pool. Buyers, holder counts and top-10 concentration from on-chain balances (24h window).';
+
+  return { data: rows, meta: buildMeta(rows.length, coverage) };
 }
 
 export async function getOgController(req, res, next) {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 30);
   try {
-    const cacheKey = 'og:' + limit;
+    const out = await dl.fetch({
+      key: 'og:' + limit,
+      feed: 'og',
+      priority: 'user',
+      request: () => buildOgResponse(limit),
+    });
 
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      return res.json(cached.data);
-    }
-
-    return res.json(await buildOgResponse(limit));
-  } catch (exc) {
-    if (isQuotaError(exc)) {
+    if (out.unavailable) {
       return res.status(503).json({
-        error: 'provider_quota',
+        error: 'upstream_unavailable',
         message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
       });
     }
-    return next(exc);
-  }
-}
 
-// Keep the default view warm so the first visitor never waits on provider
-// scans: refresh shortly after boot, then ahead of every TTL expiry.
-async function refreshDefaultCache() {
-  try {
-    await buildOgResponse(20);
-  } catch (err) {
-    console.error('[og] cache refresh failed:', err.message);
+    const response = out.data;
+    if (out.stale && response.meta) response.meta.stale = true;
+    return res.json(response);
+  } catch (exc) {
+    console.error('[og] handler error:', exc && exc.message ? exc.message : exc);
+    return res.status(502).json({
+      error: 'upstream_unavailable',
+      message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
+    });
   }
 }
-setTimeout(refreshDefaultCache, 3000);
-setInterval(refreshDefaultCache, 113_000);
