@@ -7,6 +7,7 @@ import { getTokenInfoController } from '../controllers/token/tokenInfoController
 import { getTokenChartController } from '../controllers/token/tokenChartController.js';
 import { getTokenDetailController } from '../controllers/token/tokenDetailController.js';
 import { getPriceController } from '../controllers/priceController.js';
+import { getBudgetController } from '../controllers/budget/budgetController.js';
 
 const router = Router();
 
@@ -39,5 +40,6 @@ router.get('/api/wallets/:wallet/tokens/:mint', requireAuth, tokensController.ge
 
 router.get('/api/internal/wallets/:wallet/behaviour-evaluation', requireAuth, internalController.behaviourEvaluationController);
 router.get('/api/internal/tokens/:mint/wallets/:wallet/identity', requireAuth, internalController.identityDebugController);
+router.get('/api/internal/budget', requireAuth, getBudgetController);
 
 export default router;
