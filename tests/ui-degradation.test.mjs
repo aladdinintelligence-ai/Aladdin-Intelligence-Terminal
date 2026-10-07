@@ -72,3 +72,20 @@ test("SOL price is fetched through the backend, never CoinGecko directly", () =>
   assert.match(tb, /\/api\/price\/sol/);
   assert.equal(/coingecko\.com/.test(tb), false, "direct CoinGecko URL removed");
 });
+
+test("Ask Aladdin surfaces a freshness line on stale, unknown and current answers", () => {
+  const fl = read("app/components/ask-aladdin/FreshnessLine.tsx");
+  assert.match(fl, /Data current as of/);
+  assert.match(fl, /No current data/);
+  assert.match(fl, /data-state/);
+  const sa = read("app/components/ask-aladdin/StructuredAnswer.tsx");
+  assert.match(sa, /FreshnessLine state="fresh"/);
+  assert.match(sa, /FreshnessLine state="stale"/);
+  assert.match(sa, /Source: Simulated data/);
+  assert.ok(sa.indexOf("QueryResultTable") < sa.indexOf("profileSummary"));
+});
+
+test("evidence rows render the typed freshness field", () => {
+  const ec = read("app/components/ask-aladdin/EvidenceClaim.tsx");
+  assert.match(ec, /item!\.freshness/);
+});
