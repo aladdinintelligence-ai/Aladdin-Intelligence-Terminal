@@ -78,10 +78,15 @@ test("Ask Aladdin surfaces a freshness line on stale, unknown and current answer
   assert.match(fl, /Data current as of/);
   assert.match(fl, /No current data/);
   assert.match(fl, /data-state/);
+  assert.match(fl, /timeAgo/);
+  assert.match(fl, /last confirmed/);
+  assert.match(fl, /updatedAt/);
   const sa = read("app/components/ask-aladdin/StructuredAnswer.tsx");
   assert.match(sa, /FreshnessLine state="fresh"/);
   assert.match(sa, /FreshnessLine state="stale"/);
   assert.match(sa, /Source: Simulated data/);
+  assert.match(sa, /stale=\{structured\.data_details\.stale\}/);
+  assert.match(sa, /updatedAt=\{structured\.data_details\.updatedAt\}/);
   assert.ok(sa.indexOf("QueryResultTable") < sa.indexOf("profileSummary"));
 });
 
