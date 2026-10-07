@@ -31,6 +31,7 @@ export interface OgMeta {
   fetchedAt: string;
   coverage: string;
   askTarget: string;
+  stale?: boolean;
 }
 
 interface CacheEntry {

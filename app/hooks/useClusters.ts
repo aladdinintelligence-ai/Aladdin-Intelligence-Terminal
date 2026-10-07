@@ -45,6 +45,7 @@ export interface ClusterMeta {
   fetchedAt: string;
   coverage: string;
   askTarget: string;
+  stale?: boolean;
 }
 
 interface CacheEntry {

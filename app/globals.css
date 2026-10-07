@@ -844,6 +844,24 @@ main {
   font-size: 10px;
   color: var(--text-metadata);
 }
+.ogMetaLine[data-stale="true"] {
+  color: var(--text-muted);
+  border-bottom-color: color-mix(in srgb, var(--warning) 45%, var(--border));
+}
+.ogMetaLine[data-stale="true"] [data-stale-dot] {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--warning);
+  animation: stalePulse 2s ease-out infinite;
+}
+@keyframes stalePulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.35; }
+  100% { opacity: 1; }
+}
 .evidenceIdentity small {
   display: block;
   color: #666;

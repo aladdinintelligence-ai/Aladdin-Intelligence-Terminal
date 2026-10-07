@@ -5,6 +5,7 @@ import { ArrowUpRight, CheckCircle2, ChevronRight, Filter } from "lucide-react";
 import { tokens } from "@/app/data/tokens";
 import { money, pct } from "@/app/utils/format";
 import { Badge } from "@/app/components/ui/Badge";
+import MetaLine from "@/app/components/intelligence/MetaLine";
 import { behaviourColor } from "@/app/utils/behaviour";
 import { useMovers, type MoverToken } from "@/app/hooks/useMovers";
 import { useOg, type OgToken, type OgMeta } from "@/app/hooks/useOg";
@@ -175,7 +176,7 @@ function OgRows({ tokens, meta, loading, error, filter }: { tokens: OgToken[]; m
 
   return (
     <div className="evidenceRows">
-      {meta ? <div className="ogMetaLine"><span>{meta.count} established assets</span><span>data details above</span></div> : null}
+      {meta ? <MetaLine label="established assets" count={meta.count} fetchedAt={meta.fetchedAt} stale={meta.stale} /> : null}
       {shown.map(t => (
         <Link href={`/live/${t.mint || t.id}`} className="evidenceRow ogRow" key={t.mint || t.id}>
           {t.imageUrl ? (
@@ -238,7 +239,7 @@ function FormationRows({ tokens, meta, loading, error, filter }: { tokens: Forma
 
   return (
     <div className="evidenceRows">
-      {meta ? <div className="ogMetaLine"><span>{meta.count} formations live</span><span>data details above</span></div> : null}
+      {meta ? <MetaLine label="formations live" count={meta.count} fetchedAt={meta.fetchedAt} stale={meta.stale} /> : null}
       {shown.map(t => (
         <Link href={`/live/${t.mint || t.id}`} className="evidenceRow formationRow" key={t.mint || t.id}>
           {t.imageUrl ? (
@@ -310,7 +311,7 @@ function InsiderRows({ tokens, meta, loading, error, filter }: { tokens: Insider
 
   return (
     <div className="evidenceRows">
-      {meta ? <div className="ogMetaLine"><span>{meta.count} insider cohorts tracked</span><span>data details above</span></div> : null}
+      {meta ? <MetaLine label="insider cohorts tracked" count={meta.count} fetchedAt={meta.fetchedAt} stale={meta.stale} /> : null}
       {shown.map(t => (
         <Link href={`/live/${t.mint || t.id}`} className="evidenceRow insiderRow" key={t.mint || t.id}>
           {t.imageUrl ? (
@@ -387,7 +388,7 @@ function WalletTable({ wallets, meta, loading, error, filter }: { wallets: Smart
         <span>WIN RATE</span><span>SAMPLE</span><span>ENTRY STAGE</span>
         <span>OPEN POSITION</span><span></span><span></span>
       </div>
-      {meta ? <div className="ogMetaLine"><span>{meta.count} proven wallets</span><span>data details above</span></div> : null}
+      {meta ? <MetaLine label="proven wallets" count={meta.count} fetchedAt={meta.fetchedAt} stale={meta.stale} /> : null}
       {shown.map(w => {
         const short = `${w.address.slice(0, 4)}...${w.address.slice(-4)}`;
         return (
@@ -489,7 +490,7 @@ function ClusterRows({ tokens, meta, loading, error, filter }: { tokens: Cluster
 
   return (
     <div className="evidenceRows">
-      {meta ? <div className="ogMetaLine"><span>{meta.count} wallet clusters detected</span><span>data details above</span></div> : null}
+      {meta ? <MetaLine label="wallet clusters detected" count={meta.count} fetchedAt={meta.fetchedAt} stale={meta.stale} /> : null}
       {shown.map(t => (
         <Link href={`/live/${t.representativeMint || t.id}`} className="evidenceRow clusterRow" key={t.id}>
           <span className="coin" style={{ background: t.color }}>{t.name[0]}</span>
@@ -562,7 +563,7 @@ function HistoricalRows({ tokens, hero, meta, loading, error, filter }: { tokens
             <span><small>FAILED SUBSET</small><b>{hero.failed}</b></span>
           </div>
         ) : null}
-        {meta ? <div className="ogMetaLine"><span>{meta.count} formations matched out of {hero ? hero.analyzed : "—"} analysed</span><span>data details above</span></div> : null}
+        {meta ? <MetaLine label="formations matched" count={meta.count} sub={`out of ${hero ? hero.analyzed : "—"} analysed`} fetchedAt={meta.fetchedAt} stale={meta.stale} /> : null}
         {shown.map(t => (
           <Link href={`/live/${t.mint || t.id}`} className="matchRow" key={t.id}>
             <b>{t.similarity}%</b>

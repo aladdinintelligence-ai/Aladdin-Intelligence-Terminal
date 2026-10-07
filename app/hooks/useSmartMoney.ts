@@ -26,6 +26,7 @@ export interface SmartMoneyMeta {
   fetchedAt: string;
   coverage: string;
   askTarget: string;
+  stale?: boolean;
 }
 
 interface CacheEntry {

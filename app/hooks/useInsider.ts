@@ -44,6 +44,7 @@ export interface InsiderMeta {
   fetchedAt: string;
   coverage: string;
   askTarget: string;
+  stale?: boolean;
 }
 
 interface CacheEntry {

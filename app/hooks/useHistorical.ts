@@ -59,6 +59,7 @@ export interface HistoricalMeta {
   fetchedAt: string;
   coverage: string;
   askTarget: string;
+  stale?: boolean;
 }
 
 interface HistoricalResponse {
