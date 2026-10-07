@@ -65,3 +65,10 @@ test("each intel panel is isolated behind an error boundary", () => {
   assert.match(fp, /import PanelBoundary/);
   assert.ok((fp.match(/<PanelBoundary/g) || []).length >= 8);
 });
+
+test("SOL price is fetched through the backend, never CoinGecko directly", () => {
+  const tb = read("app/components/layout/TopBar.tsx");
+  assert.match(tb, /apiFetch/);
+  assert.match(tb, /\/api\/price\/sol/);
+  assert.equal(/coingecko\.com/.test(tb), false, "direct CoinGecko URL removed");
+});

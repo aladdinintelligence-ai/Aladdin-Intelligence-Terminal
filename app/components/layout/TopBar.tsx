@@ -3,38 +3,24 @@ import {useEffect,useRef,useState} from "react";
 import Link from "next/link";
 import {Wifi} from "lucide-react";
 import {useLaunches} from "@/app/hooks/useLaunches";
+import {apiFetch} from "@/app/lib/api";
 import {Skeleton} from "@/app/components/ui/Skeleton";
 import "@/app/components/ui/skeleton.css";
 
 function useSolPrice() {
-  const [price, setPrice] = useState<number | null>(180);
+  const [price, setPrice] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
 
     const fetch_ = async () => {
       try {
-        const res = await fetch(
-          "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
-        );
-
-        if (!res.ok) {
-          if (active) setPrice(180);
-          return;
-        }
-
-        const data = await res.json();
-        const solPrice = data?.solana?.usd;
-
-        if (active) {
-          setPrice(
-            typeof solPrice === "number" && solPrice > 0
-              ? solPrice
-              : 90
-          );
+        const r = await apiFetch<{ data: { price: number | null } }>("/api/price/sol");
+        if (active && typeof r.data?.price === "number" && r.data.price > 0) {
+          setPrice(r.data.price);
         }
       } catch {
-        if (active) setPrice(90);
+        // Keep the last known price; the backend already degrades to stale values.
       }
     };
 
