@@ -1,14 +1,7 @@
-import axios from 'axios';
 import { fetchMovers as fetchMoversFromProvider, provider as dataProvider } from '../../providers/index.js';
+import dl from '../../providers/dataLayer.js';
 
-const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex/tokens';
-const cache = new Map();
-const CACHE_TTL = 120_000;
-
-function isQuotaError(err) {
-  const message = err?.message || '';
-  return message.includes('402') || /quota|points limit|rate limit/i.test(message);
-}
+const FETCH_OPTS = { feed: 'movers', priority: 'user' };
 
 function generateColor(mint) {
   const colors = [
@@ -40,97 +33,105 @@ function classifyFormation(token) {
   return 'CONCENTRATED ACCUMULATION';
 }
 
+// Fetch ALL market data from DexScreener (price, mc, liquidity, priceChange,
+// imageUrl) routed through the data layer. Returns a map mint -> first pair.
+async function fetchDexMarketData(mints) {
+  const res = await dl.dexBatch(mints, { feed: 'movers' });
+  if (res.error) return new Map();
+  const dexMap = new Map();
+  for (const mint of mints) {
+    const pair = (res[mint] || [])[0];
+    if (!pair) continue;
+    dexMap.set(mint, {
+      symbol: pair?.baseToken?.symbol || null,
+      name: pair?.baseToken?.name || null,
+      priceUsd: pair?.priceUsd != null ? Number(pair.priceUsd) : null,
+      marketCapUsd: pair?.marketCap != null ? Number(pair.marketCap) : (pair?.fdv != null ? Number(pair.fdv) : null),
+      liquidityUsd: pair?.liquidity?.usd != null ? Number(pair.liquidity.usd) : null,
+      volume24h: pair?.volume?.h24 != null ? Number(pair.volume.h24) : null,
+      priceChange24h: pair?.priceChange?.h24 != null ? Number(pair.priceChange.h24) : null,
+      imageUrl: pair?.info?.imageUrl || null,
+    });
+  }
+  return dexMap;
+}
+
+// Full build pipeline wrapped so dl.fetch can cache/coalesce and fall back to
+// stale (or { unavailable }) when providers are down.
+async function buildMovers(limit) {
+  const { error, tokens: providerTokens } = await fetchMoversFromProvider(limit, FETCH_OPTS);
+  if (error) {
+    const err = new Error(error);
+    err.status = 0;
+    throw err;
+  }
+
+  const empty = { data: [], meta: { count: 0, source: `${dataProvider}+dexscreener` } };
+  if (!providerTokens.length) return empty;
+
+  const mints = providerTokens.map((t) => t.mint);
+  const dexMap = await fetchDexMarketData(mints);
+
+  // Combine: Provider (volume, buyers) + DexScreener (price, mc, liq, change, image).
+  const tokens = providerTokens
+    .map((t) => {
+      const dex = dexMap.get(t.mint) || {};
+      return {
+        id: t.mint.slice(0, 8),
+        mint: t.mint,
+        symbol: dex.symbol || t.symbol || t.mint.slice(0, 6).toUpperCase(),
+        name: dex.name || t.name || 'Unknown',
+        mc: dex.marketCapUsd ?? 0,
+        liquidity: dex.liquidityUsd ?? 0,
+        volume: dex.volume24h ?? t.volume ?? 0,
+        buyers: t.buyers || 0,
+        formation: classifyFormation({
+          marketCapUsd: dex.marketCapUsd,
+          liquidityUsd: dex.liquidityUsd,
+          volume24h: dex.volume24h,
+          buyers: t.buyers,
+        }),
+        change: dex.priceChange24h ?? 0,
+        color: generateColor(t.mint),
+        imageUrl: dex.imageUrl || null,
+      };
+    })
+    .filter((t) => t.mc > 0 && t.change !== 0);
+
+  return {
+    data: tokens,
+    meta: { count: tokens.length, source: `${dataProvider}+dexscreener` },
+  };
+}
+
 export async function getMoversController(req, res, next) {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 50);
     const cacheKey = `movers:${limit}`;
 
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      return res.json(cached.data);
-    }
+    const out = await dl.fetch({
+      key: cacheKey,
+      feed: 'movers',
+      priority: 'user',
+      request: () => buildMovers(limit),
+    });
 
-    // 1. Fetch top tokens by volume from Bitquery (identifies movers)
-    const { error, tokens: providerTokens } = await fetchMoversFromProvider(limit);
-    if (error) throw new Error(error);
-
-    if (providerTokens.length === 0) {
-      const empty = { data: [], meta: { count: 0, source: dataProvider, fetchedAt: new Date().toISOString() } };
-      return res.json(empty);
-    }
-
-    // 2. Fetch ALL market data from DexScreener (price, mc, liquidity, priceChange, imageUrl)
-    const mints = providerTokens.map(t => t.mint);
-    const dexMap = new Map();
-    try {
-      // DexScreener supports batch lookups (max ~30 per request)
-      const batch = mints.slice(0, 30);
-      const { data } = await axios.get(`${DEXSCREENER_API}/${batch.join(',')}`, { timeout: 10000 });
-      for (const pair of (data?.pairs || [])) {
-        const addr = pair?.baseToken?.address;
-        if (!addr) continue;
-        // Use first pair per token (highest liquidity by default from DexScreener)
-        if (dexMap.has(addr)) continue;
-        dexMap.set(addr, {
-          symbol: pair?.baseToken?.symbol || null,
-          name: pair?.baseToken?.name || null,
-          priceUsd: pair?.priceUsd != null ? Number(pair.priceUsd) : null,
-          marketCapUsd: pair?.marketCap != null ? Number(pair.marketCap) : (pair?.fdv != null ? Number(pair.fdv) : null),
-          liquidityUsd: pair?.liquidity?.usd != null ? Number(pair.liquidity.usd) : null,
-          volume24h: pair?.volume?.h24 != null ? Number(pair.volume.h24) : null,
-          priceChange24h: pair?.priceChange?.h24 != null ? Number(pair.priceChange.h24) : null,
-          imageUrl: pair?.info?.imageUrl || null,
-        });
-      }
-    } catch (err) {
-      console.error(`[movers] DexScreener fetch failed:`, err.message);
-    }
-
-    // 3. Combine: Provider (volume, buyers) + DexScreener (price, mc, liq, change, image)
-    // Only include tokens that have market data from DexScreener
-    const tokens = providerTokens
-      .map(t => {
-        const dex = dexMap.get(t.mint) || {};
-        return {
-          id: t.mint.slice(0, 8),
-          mint: t.mint,
-          symbol: dex.symbol || t.symbol || t.mint.slice(0, 6).toUpperCase(),
-          name: dex.name || t.name || 'Unknown',
-          mc: dex.marketCapUsd ?? 0,
-          liquidity: dex.liquidityUsd ?? 0,
-          volume: dex.volume24h ?? t.volume ?? 0,
-          buyers: t.buyers || 0,
-          formation: classifyFormation({
-            marketCapUsd: dex.marketCapUsd,
-            liquidityUsd: dex.liquidityUsd,
-            volume24h: dex.volume24h,
-            buyers: t.buyers,
-          }),
-          change: dex.priceChange24h ?? 0,
-          color: generateColor(t.mint),
-          imageUrl: dex.imageUrl || null,
-        };
-      })
-      .filter(t => t.mc > 0 && t.change !== 0);
-
-    const response = {
-      data: tokens,
-      meta: {
-        count: tokens.length,
-        source: `${dataProvider}+dexscreener`,
-        fetchedAt: new Date().toISOString(),
-      },
-    };
-
-    cache.set(cacheKey, { data: response, ts: Date.now() });
-    return res.json(response);
-  } catch (exc) {
-    if (isQuotaError(exc)) {
+    if (out.unavailable) {
       return res.status(503).json({
-        error: 'provider_quota',
+        error: 'upstream_unavailable',
         message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
       });
     }
-    return next(exc);
+
+    const response = out.data;
+    response.meta.fetchedAt = new Date(out.updatedAt).toISOString();
+    if (out.stale) response.meta.stale = true;
+    return res.json(response);
+  } catch (exc) {
+    console.error(`[movers] handler error:`, exc && exc.message ? exc.message : exc);
+    return res.status(502).json({
+      error: 'upstream_unavailable',
+      message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
+    });
   }
 }

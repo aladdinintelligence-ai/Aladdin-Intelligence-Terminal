@@ -4,6 +4,14 @@ const PUMP_FUN_PROGRAM = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
+// fetch* helpers route through the resilient dataLayer (see providers/bitquery.js
+// for the rationale). Lazy import keeps the ESM graph acyclic.
+let _dlPromise = null;
+function dlBq(query, label, feed, priority) {
+  if (!_dlPromise) _dlPromise = import('./dataLayer.js');
+  return _dlPromise.then((m) => m.default.bitquery(query, label, { feed: feed || 'data', priority: priority || 'user' }));
+}
+
 let _baseUrl = '';
 let _apiKey = '';
 let _timeout = 30000;
@@ -62,7 +70,7 @@ function calcBonding(basePostAmount) {
 }
 
 // Fetch the latest DEX pool state for a set of mints, one pool per mint.
-async function fetchPoolsForMints(mints, label = '') {
+async function fetchPoolsForMints(mints, label = '', feed = 'launches') {
   const poolByMint = new Map();
   if (mints.length === 0) return poolByMint;
 
@@ -85,7 +93,7 @@ async function fetchPoolsForMints(mints, label = '') {
     }
   }`;
 
-  const { error, data } = await graphql(query, label);
+  const { error, data } = await dlBq(query, label, feed);
   if (error) return poolByMint;
 
   for (const p of dedup(data?.Solana?.DEXPools || [], x => x.Pool?.Market?.BaseCurrency?.MintAddress)) {
@@ -95,7 +103,7 @@ async function fetchPoolsForMints(mints, label = '') {
   return poolByMint;
 }
 
-async function fetchVolumeForMints(mints, hours = 24, label = '') {
+async function fetchVolumeForMints(mints, hours = 24, label = '', feed = 'launches') {
   const volumeByMint = new Map();
   if (mints.length === 0) return volumeByMint;
 
@@ -117,7 +125,7 @@ async function fetchVolumeForMints(mints, hours = 24, label = '') {
     }
   }`;
 
-  const { error, data } = await graphql(volQuery, label);
+  const { error, data } = await dlBq(volQuery, label, feed);
   if (error) return volumeByMint;
 
   for (const v of data?.Solana?.DEXTradeByTokens || []) {
@@ -127,7 +135,7 @@ async function fetchVolumeForMints(mints, hours = 24, label = '') {
   return volumeByMint;
 }
 
-async function fetchFirstTradeTimeForMints(mints, label = '') {
+async function fetchFirstTradeTimeForMints(mints, label = '', feed = 'launches') {
   const firstTradeByMint = new Map();
   if (mints.length === 0) return firstTradeByMint;
 
@@ -147,7 +155,7 @@ async function fetchFirstTradeTimeForMints(mints, label = '') {
     }
   }`;
 
-  const { error, data } = await graphql(query, label);
+  const { error, data } = await dlBq(query, label, feed);
   if (error) return firstTradeByMint;
 
   for (const row of data?.Solana?.DEXTradeByTokens || []) {
@@ -161,7 +169,7 @@ async function fetchFirstTradeTimeForMints(mints, label = '') {
 // Distinct wallets holding a positive balance per mint. BalanceUpdates is a
 // change-log, so we take the most recent row per (mint, account) in JS
 // (rows come newest-first via Block_Slot) and count balances above zero.
-async function fetchHoldersCountForMints(mints, label = '') {
+async function fetchHoldersCountForMints(mints, label = '', feed = 'launches') {
   const holdersByMint = new Map();
   if (mints.length === 0) return holdersByMint;
 
@@ -185,7 +193,7 @@ async function fetchHoldersCountForMints(mints, label = '') {
     }
   }`;
 
-  const { error, data } = await graphql(query, label);
+  const { error, data } = await dlBq(query, label, feed);
   if (error) return holdersByMint;
 
   const seen = new Map();
@@ -208,7 +216,7 @@ async function fetchHoldersCountForMints(mints, label = '') {
   return holdersByMint;
 }
 
-async function fetchTxCountForMints(mints, label = '') {
+async function fetchTxCountForMints(mints, label = '', feed = 'launches') {
   const txByMint = new Map();
   if (mints.length === 0) return txByMint;
 
@@ -228,7 +236,7 @@ async function fetchTxCountForMints(mints, label = '') {
     }
   }`;
 
-  const { error, data } = await graphql(query, label);
+  const { error, data } = await dlBq(query, label, feed);
   if (error) return txByMint;
 
   for (const row of data?.Solana?.DEXTradeByTokens || []) {
@@ -238,7 +246,7 @@ async function fetchTxCountForMints(mints, label = '') {
   return txByMint;
 }
 
-export async function fetchNewTokens(limit = 50) {
+export async function fetchNewTokens(limit = 50, { feed = 'launches', priority = 'user' } = {}) {
   const query = `{
     Solana {
       supply: TokenSupplyUpdates(
@@ -272,7 +280,7 @@ export async function fetchNewTokens(limit = 50) {
     }
   }`;
 
-  const { error, data } = await graphql(query, 'fetchNewTokens');
+  const { error, data } = await dlBq(query, 'fetchNewTokens', feed, priority);
   if (error) return { error, tokens: [] };
 
   const supply = dedup(data?.Solana?.supply || [], x => x.TokenSupplyUpdate?.Currency?.MintAddress);
@@ -289,7 +297,7 @@ export async function fetchNewTokens(limit = 50) {
     .filter(mint => mint && !poolByMint.has(mint));
 
   if (missingMints.length > 0) {
-    const fallbackPools = await fetchPoolsForMints(missingMints, 'fetchNewTokens:fallback');
+    const fallbackPools = await fetchPoolsForMints(missingMints, 'fetchNewTokens:fallback', feed);
     for (const [mint, pool] of fallbackPools) poolByMint.set(mint, pool);
   }
 
@@ -312,7 +320,7 @@ export async function fetchNewTokens(limit = 50) {
   return { error: null, tokens };
 }
 
-export async function fetchAlmostBondedTokens(limit = 50) {
+export async function fetchAlmostBondedTokens(limit = 50, { feed = 'launches', priority = 'user' } = {}) {
   const poolQuery = `{
     Solana {
       DEXPools(
@@ -336,7 +344,7 @@ export async function fetchAlmostBondedTokens(limit = 50) {
     }
   }`;
 
-  const { error, data } = await graphql(poolQuery, 'fetchAlmostBondedTokens');
+  const { error, data } = await dlBq(poolQuery, 'fetchAlmostBondedTokens', feed, priority);
   if (error) return { error, tokens: [] };
 
   const pools = dedup(data?.Solana?.DEXPools || [], x => x.Pool?.Market?.BaseCurrency?.MintAddress);
@@ -345,8 +353,8 @@ export async function fetchAlmostBondedTokens(limit = 50) {
   if (mints.length === 0) return { error: null, tokens: [] };
 
   const [volumeByMint, firstTradeByMint] = await Promise.all([
-    fetchVolumeForMints(mints, 24, 'fetchAlmostBondedTokens'),
-    fetchFirstTradeTimeForMints(mints, 'fetchAlmostBondedTokens:age'),
+    fetchVolumeForMints(mints, 24, 'fetchAlmostBondedTokens', feed),
+    fetchFirstTradeTimeForMints(mints, 'fetchAlmostBondedTokens:age', feed),
   ]);
 
   const tokens = pools.map(pool => {
@@ -373,7 +381,7 @@ export async function fetchAlmostBondedTokens(limit = 50) {
   return { error: null, tokens };
 }
 
-export async function fetchMigratedTokens(limit = 50) {
+export async function fetchMigratedTokens(limit = 50, { feed = 'launches', priority = 'user' } = {}) {
   const query = `{
     Solana {
       DEXPools(
@@ -394,7 +402,7 @@ export async function fetchMigratedTokens(limit = 50) {
     }
   }`;
 
-  const { error, data } = await graphql(query, 'fetchMigratedTokens');
+  const { error, data } = await dlBq(query, 'fetchMigratedTokens', feed, priority);
   if (error) return { error, tokens: [] };
 
   const pools = dedup(data?.Solana?.DEXPools || [], x => x.Pool?.Market?.BaseCurrency?.MintAddress);
@@ -403,8 +411,8 @@ export async function fetchMigratedTokens(limit = 50) {
   if (mints.length === 0) return { error: null, tokens: [] };
 
   const [holdersByMint, txByMint] = await Promise.all([
-    fetchHoldersCountForMints(mints, 'fetchMigratedTokens:holders'),
-    fetchTxCountForMints(mints, 'fetchMigratedTokens:txCount'),
+    fetchHoldersCountForMints(mints, 'fetchMigratedTokens:holders', feed),
+    fetchTxCountForMints(mints, 'fetchMigratedTokens:txCount', feed),
   ]);
 
   const tokens = pools.map(pool => {
@@ -428,7 +436,7 @@ export async function fetchMigratedTokens(limit = 50) {
   return { error: null, tokens };
 }
 
-export async function fetchTrendingTokens(limit = 50, hours = 1) {
+export async function fetchTrendingTokens(limit = 50, hours = 1, { feed = 'launches', priority = 'user' } = {}) {
   const since = sinceIso(hours);
 
   const volQuery = `{
@@ -448,7 +456,7 @@ export async function fetchTrendingTokens(limit = 50, hours = 1) {
     }
   }`;
 
-  const { error, data } = await graphql(volQuery, 'fetchTrendingTokens');
+  const { error, data } = await dlBq(volQuery, 'fetchTrendingTokens', feed, priority);
   if (error) return { error, tokens: [] };
 
   const trades = dedup(data?.Solana?.trades || [], x => x.Trade?.Currency?.MintAddress);
@@ -457,8 +465,8 @@ export async function fetchTrendingTokens(limit = 50, hours = 1) {
   if (mints.length === 0) return { error: null, tokens: [] };
 
   const [poolByMint, firstTradeByMint] = await Promise.all([
-    fetchPoolsForMints(mints, 'fetchTrendingTokens'),
-    fetchFirstTradeTimeForMints(mints, 'fetchTrendingTokens:age'),
+    fetchPoolsForMints(mints, 'fetchTrendingTokens', feed),
+    fetchFirstTradeTimeForMints(mints, 'fetchTrendingTokens:age', feed),
   ]);
 
   const tokens = trades.map(trade => {
@@ -481,7 +489,7 @@ export async function fetchTrendingTokens(limit = 50, hours = 1) {
   return { error: null, tokens };
 }
 
-export async function fetchTokenDetails(mint) {
+export async function fetchTokenDetails(mint, { feed = 'tokenDetail', priority = 'user' } = {}) {
   const query = `{
     Solana {
       DEXPools(
@@ -509,7 +517,7 @@ export async function fetchTokenDetails(mint) {
     }
   }`;
 
-  const { error, data } = await graphql(query, 'fetchTokenDetails');
+  const { error, data } = await dlBq(query, 'fetchTokenDetails', 'tokenDetail', priority);
   if (error) return { error, token: null };
 
   const pool = data?.Solana?.DEXPools?.[0];
@@ -533,7 +541,7 @@ export async function fetchTokenDetails(mint) {
 // ChainStream's Trading.Pairs cube exposes pre-aggregated 1-minute bars only.
 // We fetch enough 1-minute bars to cover the requested interval and candle
 // count, then bucket them into intervalMinutes candles locally.
-export async function fetchTokenOHLC(mint, { intervalMinutes = 5, limit = 100 } = {}) {
+export async function fetchTokenOHLC(mint, { intervalMinutes = 5, limit = 100, feed = 'chart', priority = 'user' } = {}) {
   const fetchCount = Math.min(limit * intervalMinutes, 30000);
   const query = `{
     Trading {
@@ -552,7 +560,7 @@ export async function fetchTokenOHLC(mint, { intervalMinutes = 5, limit = 100 } 
     }
   }`;
 
-  const result = await graphql(query, ':ohlc');
+  const result = await dlBq(query, ':ohlc', feed, priority);
   if (result.error) return { error: result.error, candles: [] };
 
   const raw = result.data?.Trading?.Pairs || [];
@@ -611,7 +619,7 @@ const MAJOR_MINTS = new Set([
 ]);
 const MAJOR_SYMBOLS = new Set(['SOL', 'USDC', 'USDT', 'WSOL', 'MSOL', 'STSOL']);
 
-export async function fetchMovers(limit = 30) {
+export async function fetchMovers(limit = 30, { feed = 'movers', priority = 'user' } = {}) {
   const since = sinceIso(24);
   const fetchLimit = limit * 3;
 
@@ -634,7 +642,7 @@ export async function fetchMovers(limit = 30) {
     }
   }`;
 
-  const { error, data } = await graphql(volQuery, 'fetchMovers');
+  const { error, data } = await dlBq(volQuery, 'fetchMovers', feed, priority);
   if (error) return { error, tokens: [] };
 
   const trades = data?.Solana?.trades || [];
@@ -652,7 +660,7 @@ export async function fetchMovers(limit = 30) {
 
   if (mints.length === 0) return { error: null, tokens: [] };
 
-  const buyerCounts = await fetchBuyerCountsForMints(mints, 24, 'fetchMovers');
+  const buyerCounts = await fetchBuyerCountsForMints(mints, 24, 'fetchMovers', feed);
 
   return {
     error: null,
@@ -669,7 +677,7 @@ export async function fetchMovers(limit = 30) {
   };
 }
 
-async function fetchBuyerCountsForMints(mints, hours, label = '') {
+async function fetchBuyerCountsForMints(mints, hours, label = '', feed = 'movers') {
   const counts = new Map();
   if (mints.length === 0) return counts;
 
@@ -694,7 +702,7 @@ async function fetchBuyerCountsForMints(mints, hours, label = '') {
     }
   }`;
 
-  const { error, data } = await graphql(query, label);
+  const { error, data } = await dlBq(query, label, feed);
   if (error) return counts;
 
   const seen = new Map();

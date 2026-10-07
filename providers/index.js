@@ -1,5 +1,6 @@
 import * as bitquery from './bitquery.js';
 import * as chainstream from './chainstream.js';
+import { createGate } from './gate.js';
 
 const providerName = (process.env.DATA_PROVIDER || 'bitquery').toLowerCase();
 
@@ -28,31 +29,34 @@ export const {
 } = active;
 
 // The provider enforces a per-session concurrency limit and rejects bursts of
-// simultaneous GraphQL calls with "too many concurrent queries". All of the
-// intelligence controllers funnel through graphql(), so we serialize queries
-// app-wide through a small FIFO gate. This keeps every controller under the
-// limit even when their refresh timers coincide for a moment.
-const MAX_CONCURRENT = Math.max(Number(process.env.PROVIDER_MAX_CONCURRENT) || 3, 1);
-let activeQueries = 0;
-const queue = [];
+// simultaneous GraphQL calls with "too many concurrent queries". All traffic
+// flows through graphql() (directly for the intelligence controllers, or via
+// the resilient dataLayer in providers/dataLayer.js), serialized through a
+// small priority FIFO gate. Gate sizing is authoritative from the DL_* env
+// namespace (configs/dataLayer.js is the single reader); the legacy
+// PROVIDER_MAX_CONCURRENT var is deliberately NOT consulted here so an old
+// .env value cannot silently keep the pool below the approved plan (e.g. 3).
+// Pool = DL_MAX_CONCURRENT (default 5), background capped at
+// DL_BACKGROUND_CONCURRENT (default 4), which reserves one slot for
+// user-triggered requests.
+import { dataLayerConfig } from '../configs/dataLayer.js';
 
-function runGated(task) {
-  activeQueries++;
-  task().finally(() => {
-    activeQueries--;
-    const next = queue.shift();
-    if (next) runGated(next);
-  });
+const MAX_CONCURRENT = Math.max(dataLayerConfig.maxConcurrent, 1);
+const BACKGROUND_CONCURRENT = Math.max(
+  dataLayerConfig.backgroundConcurrent > 0 ? dataLayerConfig.backgroundConcurrent : Math.min(MAX_CONCURRENT - 1, 4),
+  0
+);
+
+const gate = createGate({
+  maxConcurrent: MAX_CONCURRENT,
+  backgroundConcurrent: BACKGROUND_CONCURRENT,
+  transport: rawGraphql,
+});
+
+export const graphql = gate.gated;
+
+export function gateState() {
+  return gate.state();
 }
-
-function gatedGraphql(query, label) {
-  return new Promise((resolve, reject) => {
-    const task = () => Promise.resolve(rawGraphql(query, label)).then(resolve, reject);
-    if (activeQueries < MAX_CONCURRENT) runGated(task);
-    else queue.push(task);
-  });
-}
-
-export const graphql = gatedGraphql;
 
 export const provider = providerName;

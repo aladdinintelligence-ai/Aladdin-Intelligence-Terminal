@@ -5,36 +5,13 @@ import {
   fetchTrendingTokens,
   provider as dataProvider,
 } from '../../providers/index.js';
+import dl from '../../providers/dataLayer.js';
 import { Token } from '../../models/token.model.js';
-import axios from 'axios';
 
-const CACHE_TTL = 120_000;
-const STALE_TTL = 300_000;
-const QUOTA_COOLDOWN_MS = 5 * 60_000;
-const responseCache = new Map();
-const inflightRequests = new Map();
-let quotaCooldownUntil = 0;
-
-function isQuotaError(err) {
-  const message = err?.message || '';
-  return message.includes('402') || /quota|points limit|rate limit/i.test(message);
-}
-
-function scheduleRefresh(tab, limit, cacheKey) {
-  if (inflightRequests.has(cacheKey)) return inflightRequests.get(cacheKey);
-  const inflight = refreshCache(tab, limit, cacheKey);
-  inflightRequests.set(cacheKey, inflight);
-  inflight
-    .catch((err) => {
-      console.error(`[launches] background refresh failed for ${tab}:`, err.message);
-    })
-    .finally(() => inflightRequests.delete(cacheKey));
-  return inflight;
-}
-
-const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex/tokens';
-const imageCache = new Map();
 const IMAGE_CACHE_TTL = 300_000;
+const imageCache = new Map();
+
+const FETCH_OPTS = { feed: 'launches', priority: 'user' };
 
 function generateColor(mint) {
   const colors = [
@@ -60,7 +37,7 @@ async function enrichWithImageUrls(tokens) {
   const mints = tokens.map((t) => t.mint).filter(Boolean);
   if (!mints.length) return tokens;
 
-  // 1. Check memory cache
+  // 1. Memory cache
   const imageMap = new Map();
   const missing = [];
   for (const mint of mints) {
@@ -72,7 +49,7 @@ async function enrichWithImageUrls(tokens) {
     }
   }
 
-  // 2. Check MongoDB for remaining
+  // 2. MongoDB
   if (missing.length) {
     const docs = await Token.find({ _id: { $in: missing } }).select('imageUrl').lean();
     for (const doc of docs) {
@@ -83,28 +60,21 @@ async function enrichWithImageUrls(tokens) {
     }
     const stillMissing = missing.filter((m) => !imageMap.has(m));
 
-    // 3. Fetch from DexScreener for any still missing (batch up to 30)
+    // 3. DexScreener for any still missing (routes through the data layer:
+    // token bucket, circuit breaker, budget accounting).
     if (stillMissing.length) {
       try {
-        const batch = stillMissing.slice(0, 30);
-        const { data } = await axios.get(`${DEXSCREENER_API}/${batch.join(',')}`, { timeout: 8000 });
-        const pairs = data?.pairs || [];
-        for (const pair of pairs) {
-          const mint = pair?.baseToken?.address;
-          const url = pair?.info?.imageUrl || null;
-          if (mint && url) {
-            imageMap.set(mint, url);
+        const res = await dl.dexBatch(stillMissing.slice(0, 30), { feed: 'launches' });
+        if (res && !res.error) {
+          for (const mint of stillMissing) {
+            const pairs = res[mint] || [];
+            const url = pairs[0]?.info?.imageUrl || null;
+            if (url) imageMap.set(mint, url);
             imageCache.set(mint, { url, ts: Date.now() });
           }
         }
-        // Cache misses too so we don't re-fetch
-        for (const mint of stillMissing) {
-          if (!imageMap.has(mint)) {
-            imageCache.set(mint, { url: null, ts: Date.now() });
-          }
-        }
       } catch (err) {
-        console.error(`[launches] DexScreener image fetch failed:`, err.message);
+        console.error(`[launches] DexScreener image fetch failed:`, err && err.message ? err.message : err);
       }
     }
   }
@@ -190,103 +160,57 @@ const mappers = {
   trending: mapTrendingTokens,
 };
 
-async function fetchWithRetry(tab, limit, retries = 2) {
+// Full build pipeline wrapped so dl.fetch can cache/coalesce it and fall back
+// to stale (or { unavailable }) when the provider is down. Any provider error
+// surfaces as a throw; the data layer converts that into stale/unavailable,
+// so raw upstream messages never reach the client.
+async function buildLaunches(tab, limit) {
   const fetcher = fetchers[tab];
-  if (!fetcher) throw new Error('Invalid tab');
-
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      return await fetcher(limit);
-    } catch (err) {
-      const is429 = err?.message?.includes('429') || err?.status === 429;
-      if (is429 && attempt < retries) {
-        const delay = 2000 * (attempt + 1);
-        console.log(`[launches] 429 on ${tab}, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
-        await new Promise((r) => setTimeout(r, delay));
-        continue;
-      }
-      throw err;
-    }
+  if (!fetcher) throw Object.assign(new Error(`Invalid tab: ${tab}`), { status: 400 });
+  const result = await fetcher(limit, FETCH_OPTS);
+  if (result.error) {
+    const err = new Error(result.error);
+    err.status = 0;
+    throw err;
   }
+  const mapper = mappers[tab];
+  const mapped = mapper(result.tokens);
+  const tokens = await enrichWithImageUrls(mapped);
+  return {
+    data: tokens,
+    meta: { tab, count: tokens.length, source: dataProvider },
+  };
 }
 
 export async function getLaunchesController(req, res, next) {
   try {
     const tab = req.query.tab || 'new';
     const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 100);
-    const cacheKey = `${tab}:${limit}`;
+    const cacheKey = `launches:${tab}:${limit}`;
 
-    const cached = responseCache.get(cacheKey);
-    const age = cached ? Date.now() - cached.timestamp : Infinity;
+    const out = await dl.fetch({
+      key: cacheKey,
+      feed: 'launches',
+      priority: 'user',
+      request: () => buildLaunches(tab, limit),
+    });
 
-    if (age < CACHE_TTL) {
-      return res.json(cached.response);
-    }
-
-    if (age < STALE_TTL && cached) {
-      res.json(cached.response);
-      scheduleRefresh(tab, limit, cacheKey);
-      return;
-    }
-
-    const inflight = scheduleRefresh(tab, limit, cacheKey);
-
-    const response = await inflight;
-    return res.json(response);
-  } catch (exc) {
-    const cached = responseCache.get(`${req.query.tab || 'new'}:${req.query.limit || 50}`);
-    if (cached) {
-      console.log(`[launches] Serving stale cache for ${req.query.tab} after error`);
-      return res.json(cached.response);
-    }
-    if (isQuotaError(exc)) {
+    if (out.unavailable) {
       return res.status(503).json({
-        error: 'provider_quota',
+        error: 'upstream_unavailable',
         message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
       });
     }
-    return next(exc);
-  }
-}
 
-async function refreshCache(tab, limit, cacheKey) {
-  if (Date.now() < quotaCooldownUntil) {
-    console.log(`[launches] Skipping ${tab} refresh while provider quota is on cooldown`);
-    const stale = responseCache.get(cacheKey);
-    if (stale) return stale.response;
-    const err = new Error('Provider quota exceeded (cooldown)');
-    err.status = 402;
-    throw err;
-  }
-  try {
-    const result = await fetchWithRetry(tab, limit);
-
-    if (result.error) {
-      if (isQuotaError(result.error)) quotaCooldownUntil = Date.now() + QUOTA_COOLDOWN_MS;
-      throw new Error(result.error);
-    }
-
-    const mapper = mappers[tab];
-    const mapped = mapper(result.tokens);
-    const tokens = await enrichWithImageUrls(mapped);
-
-    const response = {
-      data: tokens,
-      meta: {
-        tab,
-        count: tokens.length,
-        source: dataProvider,
-        fetchedAt: new Date().toISOString(),
-      },
-    };
-
-    responseCache.set(cacheKey, { response, timestamp: Date.now() });
-    return response;
-  } catch (err) {
-    if (isQuotaError(err)) quotaCooldownUntil = Date.now() + QUOTA_COOLDOWN_MS;
-    console.error(`[launches] Failed to fetch ${tab}:`, err.message);
-    const stale = responseCache.get(cacheKey);
-    if (stale) return stale.response;
-    throw err;
+    const response = out.data;
+    response.meta.fetchedAt = new Date(out.updatedAt).toISOString();
+    if (out.stale) response.meta.stale = true;
+    return res.json(response);
+  } catch (exc) {
+    console.error(`[launches] handler error:`, exc && exc.message ? exc.message : exc);
+    return res.status(502).json({
+      error: 'upstream_unavailable',
+      message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
+    });
   }
 }

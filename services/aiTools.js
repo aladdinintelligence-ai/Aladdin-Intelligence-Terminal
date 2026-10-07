@@ -1,5 +1,4 @@
 import {
-  graphql as providerGraphql,
   fetchNewTokens,
   fetchAlmostBondedTokens,
   fetchMigratedTokens,
@@ -7,6 +6,7 @@ import {
   fetchMovers,
   provider as dataProvider,
 } from '../providers/index.js';
+import dl from '../providers/dataLayer.js';
 import { Token, TokenHolder, WalletTokenPosition, WalletBehaviourIdentity } from '../models/index.js';
 
 const MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -211,7 +211,7 @@ export async function isTokenMint(address) {
           }
         }
       }`;
-      const { data } = await providerGraphql(query, 'isTokenMint');
+      const { data } = await dl.bitquery(query, 'isTokenMint', { feed: 'ismint', priority: 'user' });
       return Boolean(data?.Solana?.DEXPools?.length);
     } catch (err) {
       console.error(`[isTokenMint] lookup failed for ${address.slice(0, 8)}: ${err.message}`);

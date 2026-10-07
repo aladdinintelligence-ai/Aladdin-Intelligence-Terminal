@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "sync": "node workers/tokenSync.js"
+    "sync": "node workers/tokenSync.js",
+    "test": "node --test tests/"
   },
   "dependencies": {
     "@solana/web3.js": "^1.98.4",
@@ -20,7 +21,9 @@
     "google-auth-library": "^10.9.1",
     "jsonwebtoken": "^9.0.3",
     "lodash": "^4.17.21",
-    "mongoose": "^9.1.1"
+    "lru-cache": "^11.5.3",
+    "mongoose": "^9.1.1",
+    "opossum": "^9.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

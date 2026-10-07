@@ -24,6 +24,7 @@ import { initAiComposer } from './services/aiComposer.js';
 import { aiEngine } from './configs/index.js';
 import router from './routes/index.js';
 import authRouter from './routes/auth.js';
+import budget from './providers/budgetTracker.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -77,6 +78,13 @@ initAiComposer({
 });
 
 await connectDB(process.env.DB_URI || 'mongodb://localhost:27017/aladdin-db');
+
+// Hydrate budget counters from Mongo (fall back to the local JSON snapshot),
+// then enable persistence and start the periodic flush. Order matters: load()
+// mongo-first before the first flush can overwrite counters.
+budget.enablePersistence();
+await budget.load();
+budget.start();
 
 app.listen(PORT, () => {
   console.log(`[SERVER] Aladdin Node Server running on port ${PORT}`);
