@@ -133,11 +133,11 @@ function EvidenceRows({ kind }: { kind: string }) {
           </div>
           <div>
             <small>BEHAVIOURAL CHANGE</small>
-            <b>{kind === "movers" ? `${t.buyers} buyers` : kind === "formation" ? (i === 0 ? "DISCOVERY → BROAD ACCUMULATION" : "Profitable flow increasing") : `${t.buyers} buyers`}</b>
+            <b>{kind === "movers" ? (t.buyers != null ? `${t.buyers} buyers` : "—") : kind === "formation" ? (i === 0 ? "DISCOVERY → BROAD ACCUMULATION" : "Profitable flow increasing") : t.buyers != null ? `${t.buyers} buyers` : "—"}</b>
           </div>
           <div>
             <small>MARKET</small>
-            <b>{money(t.mc)} <em className={t.change < 0 ? "negative" : ""}>{pct(t.change)}</em></b>
+            <b>{money(t.mc)} <em className={t.change != null && t.change < 0 ? "negative" : ""}>{t.change != null ? pct(t.change) : "—"}</em></b>
           </div>
           <div>
             <small>WHY IT MATTERS</small>
@@ -150,8 +150,8 @@ function EvidenceRows({ kind }: { kind: string }) {
   );
 }
 
-const compact = (v: number) =>
-  v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}K` : String(v);
+const compact = (v: number | null | undefined): string =>
+  v == null || !Number.isFinite(v) ? "—" : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}K` : String(v);
 
 function OgRows({ tokens, meta, loading, error, filter }: { tokens: OgToken[]; meta: OgMeta | null; loading: boolean; error: string | null; filter: string }) {
   if (loading) {
@@ -203,7 +203,7 @@ function OgRows({ tokens, meta, loading, error, filter }: { tokens: OgToken[]; m
           <div>
             <small>MATURE STRUCTURE</small>
             <b>${compact(t.liquidity)} liq · ${compact(t.volume)} vol</b>
-            <em>{t.holders ? `${compact(t.holders)} holders · Top10 ${t.top10 || 0}%` : "—"}</em>
+            <em>{t.holders ? `${compact(t.holders)} holders · Top10 ${t.top10 != null ? `${t.top10}%` : "—"}` : "—"}</em>
           </div>
           <div>
             <small>WHY IT MATTERS</small>
@@ -257,8 +257,8 @@ function FormationRows({ tokens, meta, loading, error, filter }: { tokens: Forma
           </div>
           <div>
             <small>PARTICIPATION</small>
-            <b>{t.buyers.toLocaleString("en-US")} buyers · Top10 {t.top10}%</b>
-            <em>top wallet {t.top1}% of buys</em>
+            <b>{t.buyers != null ? t.buyers.toLocaleString("en-US") : "—"} buyers · Top10 {t.top10 != null ? `${t.top10}%` : "—"}</b>
+            <em>top wallet {t.top1 != null ? `${t.top1}%` : "—"} of buys</em>
           </div>
           <div>
             <small>MARKET</small>
@@ -329,12 +329,12 @@ function InsiderRows({ tokens, meta, loading, error, filter }: { tokens: Insider
           </div>
           <div>
             <small>LINKED SUPPLY</small>
-            <b>{t.cohortSize.toLocaleString("en-US")} wallets · 48h</b>
-            <em>{t.buyers.toLocaleString("en-US")} buyers · lead {t.lead ? `${t.lead.id}…` : "—"} entered {entryAgo(t.lead ? t.lead.entryMin : null)}</em>
+            <b>{t.cohortSize != null ? t.cohortSize.toLocaleString("en-US") : "—"} wallets · 48h</b>
+            <em>{t.buyers != null ? t.buyers.toLocaleString("en-US") : "—"} buyers · lead {t.lead ? `${t.lead.id}…` : "—"} entered {entryAgo(t.lead ? t.lead.entryMin : null)}</em>
           </div>
           <div>
             <small>SUPPLY FLOW</small>
-            <b>{t.cohortNetUsd >= 0 ? `Net ${money(t.cohortNetUsd)} sold` : `Net ${money(-t.cohortNetUsd)} added`}</b>
+            <b>{t.cohortNetUsd != null ? (t.cohortNetUsd >= 0 ? `Net ${money(t.cohortNetUsd)} sold` : `Net ${money(-t.cohortNetUsd)} added`) : "Net —"}</b>
             <em>{t.cohortPressure != null ? `Pressure ${t.cohortPressure >= 0 ? "+" : ""}${t.cohortPressure}%` : "—"} · avg sold {t.cohortAvgSold != null ? `${t.cohortAvgSold}%` : "—"}</em>
           </div>
           <div>
@@ -396,10 +396,10 @@ function WalletTable({ wallets, meta, loading, error, filter }: { wallets: Smart
             <b>{short}</b>
             <span><Badge color={(behaviourColor as Record<string, string>)[w.behaviour] || "#8b7cf6"}>{w.behaviour}</Badge></span>
             <b className="buy">{money(w.realizedPnl)}</b>
-            <span>{w.winRate}%</span>
-            <span>{w.sampleTokens} tokens</span>
-            <span>{w.entryStage.label} into ${w.entryStage.token}</span>
-            <span>{w.openUsd > 0 ? `${money(w.openUsd)} · ${w.holdingPct}%` : "Fully exited"}</span>
+            <span>{w.winRate != null ? `${w.winRate}%` : "—"}</span>
+            <span>{w.sampleTokens != null ? `${w.sampleTokens} tokens` : "—"}</span>
+            <span>{w.entryStage ? `${w.entryStage.label} into ${w.entryStage.token}` : "—"}</span>
+            <span>{w.openUsd != null && w.openUsd > 0 ? `${money(w.openUsd)} · ${w.holdingPct != null ? `${w.holdingPct}%` : "—"}` : "Fully exited"}</span>
             <span>{w.repeatable ? "Repeatable" : "—"}</span>
             <ChevronRight size={14} />
           </Link>
@@ -496,7 +496,7 @@ function ClusterRows({ tokens, meta, loading, error, filter }: { tokens: Cluster
           <span className="coin" style={{ background: t.color }}>{t.name[0]}</span>
           <div className="evidenceIdentity">
             <b>{t.name}</b>
-            <small>{t.walletCount} wallets · {t.tokenCount} tokens</small>
+            <small>{t.walletCount != null ? `${t.walletCount}` : "—"} wallets · {t.tokenCount != null ? `${t.tokenCount}` : "—"} tokens</small>
           </div>
           <div>
             <small>CURRENT STATE</small>
@@ -504,12 +504,12 @@ function ClusterRows({ tokens, meta, loading, error, filter }: { tokens: Cluster
           </div>
           <div>
             <small>OVERLAP</small>
-            <b>{t.sharedTokenCount} shared tokens</b>
-            <em>{t.coMovements} timed co-movements</em>
+            <b>{t.sharedTokenCount != null ? `${t.sharedTokenCount} shared tokens` : "—"}</b>
+            <em>{t.coMovements != null ? `${t.coMovements} timed co-movements` : "—"}</em>
           </div>
           <div>
             <small>SUPPLY FLOW</small>
-            <b>{t.netUsd >= 0 ? `Net ${money(t.netUsd)} sold` : `Net ${money(-t.netUsd)} added`}</b>
+            <b>{t.netUsd != null ? (t.netUsd >= 0 ? `Net ${money(t.netUsd)} sold` : `Net ${money(-t.netUsd)} added`) : "Net —"}</b>
             <em className={t.pressure !== null && t.pressure < 0 ? "negative" : ""}>{t.pressure != null ? `Pressure ${t.pressure >= 0 ? "+" : ""}${t.pressure}%` : "—"}</em>
           </div>
           <div>
@@ -559,18 +559,18 @@ function HistoricalRows({ tokens, hero, meta, loading, error, filter }: { tokens
           <div className="matchHero">
             <span><small>FORMATION MATCHES</small><b>{hero.matches}</b></span>
             <span><small>MEDIAN PEAK</small><b>{hero.medianPeak != null ? `${hero.medianPeak.toFixed(1)}x` : "—"}</b></span>
-            <span><small>SUCCESSFUL SUBSET</small><b>{hero.successful}</b></span>
-            <span><small>FAILED SUBSET</small><b>{hero.failed}</b></span>
+            <span><small>SUCCESSFUL SUBSET</small><b>{hero.successful != null ? hero.successful : "—"}</b></span>
+            <span><small>FAILED SUBSET</small><b>{hero.failed != null ? hero.failed : "—"}</b></span>
           </div>
         ) : null}
         {meta ? <MetaLine label="formations matched" count={meta.count} sub={`out of ${hero ? hero.analyzed : "—"} analysed`} fetchedAt={meta.fetchedAt} stale={meta.stale} /> : null}
         {shown.map(t => (
           <Link href={`/live/${t.mint || t.id}`} className="matchRow" key={t.id}>
-            <b>{t.similarity}%</b>
+            <b>{t.similarity != null ? `${t.similarity}%` : "—"}</b>
             <span>${t.symbol}</span>
             <span>{t.formation}</span>
             <span>Peak {t.medianPeak != null ? `${t.medianPeak.toFixed(1)}x` : "—"}</span>
-            <span>{t.retained}% retained</span>
+            <span>{t.retained != null ? `${t.retained}% retained` : "—"}</span>
             <ChevronRight size={14} />
           </Link>
         ))}

@@ -36,3 +36,21 @@ test("FeaturePage renders each intel panel through MetaLine", () => {
   assert.equal((fp.match(/<MetaLine/g) || []).length >= 6, true);
   assert.equal((fp.match(/className="ogMetaLine"/g) || []).length, 0);
 });
+
+test("format helpers render N/A for missing or non-finite numbers", () => {
+  const fmt = read("app/utils/format.ts");
+  assert.match(fmt, /MaybeNumber/);
+  assert.match(fmt, /Number\.isFinite/);
+  assert.match(fmt, /where money|return "—"/);
+});
+
+test("FeaturePage renders N/A instead of crashing on missing fields", () => {
+  const fp = read("app/components/intelligence/FeaturePage.tsx");
+  assert.equal(/t\.top10 \|\| 0/.test(fp), false);
+  assert.match(fp, /t\.cohortNetUsd != null/);
+  assert.match(fp, /t\.netUsd != null/);
+  assert.match(fp, /t\.similarity != null/);
+  assert.match(fp, /t\.retained != null/);
+  assert.match(fp, /w\.winRate != null/);
+  assert.match(fp, /w\.holdingPct != null/);
+});
