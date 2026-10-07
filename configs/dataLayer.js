@@ -60,6 +60,10 @@ export const dataLayerConfig = {
   breakerTimeoutMs: num('DL_BREAKER_TIMEOUT_MS', 90_000),
   breakerFailures: num('DL_BREAKER_FAILURE_THRESHOLD', 5), // percentage *10 => opossum uses %; see dataLayer
   breakerQuotaOpenMs: num('DL_QUOTA_OPEN_MS', 15 * 60_000), // long open on 402/quota
+  // Auth (Bitquery 401) failures are never retried and never negative-cached:
+  // the key is being rejected, so stop the wire and flag ops loudly for a long
+  // window rather than hammering a transient credential failure.
+  authBreakerOpenMs: num('DL_AUTH_OPEN_MS', 30 * 60_000),
 
   // Cache
   cacheMaxEntries: num('DL_CACHE_MAX_ENTRIES', 4_000),
@@ -69,6 +73,18 @@ export const dataLayerConfig = {
   telemetryFreshTtlMs: num('DL_TELEMETRY_FRESH_TTL_MS', 30_000),
   telemetryStaleTtlMs: num('DL_TELEMETRY_STALE_TTL_MS', 3 * 60_000),
   negativeCacheTtlMs: num('DL_NEGATIVE_CACHE_TTL_MS', 10 * 60_000),
+
+  // tokenDetail watch budget (approved: 5-min refresh floor per actively-watched
+  // mint, capped at 3 mints, 2 upstream calls/mint/floor = trades+stats; nothing
+  // else reloads on client polls).
+  detailTickMs: num('TD_TICK_MS', 30_000),
+  detailRefreshFloorMs: num('TD_REFRESH_FLOOR_MS', 5 * 60_000),
+  detailHotMintCap: num('TD_HOT_MINT_CAP', 3),
+  detailHotFreshTtlMs: num('TD_HOT_FRESH_TTL_MS', 5 * 60_000),
+  detailColdFreshTtlMs: num('TD_COLD_FRESH_TTL_MS', 15 * 60_000),
+  detailOnDemandFreshTtlMs: num('TD_ONDEMAND_FRESH_TTL_MS', 30 * 60_000),
+  detailStaleTtlMs: num('TD_STALE_TTL_MS', 3 * 60 * 60_000),
+  detailEmptyTtlMs: num('TD_EMPTY_TTL_MS', 5 * 60_000),
 
   // Feeds disabled at the source (e.g. OHLC chart while the query needs a
   // dataset tier the current plan forbids). Comma-separated feed names.

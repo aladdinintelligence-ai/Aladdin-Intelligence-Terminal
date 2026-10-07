@@ -50,11 +50,13 @@ const bitqueryBreaker = new CircuitBreaker(
       raw = { error: err && err.message ? err.message : 'bitquery error', status: err && err.response ? err.response.status : 0, retryAfterMs: parseRetryAfter(err) };
     }
     const s = classifyWithStatus(raw);
-    // Bad-query / plan-forbidden 4xx (e.g. 403 dataset) and quota/402 are
-    // permanent for that query: never retried AND never counted against the
-    // circuit breaker. Only upstream/retryable failures reject so opossum can
-    // open the circuit on them.
-    if (s.error && s.kind !== 'ok' && s.kind !== 'client' && s.kind !== 'quota') {
+    // Bad-query / plan-forbidden 4xx (e.g. 403 dataset) and quota/402 and auth
+    // (401) are never retried AND never counted against the circuit breaker:
+    // 403/quota mean the query/dataset is permanently bad, 401 is a credential
+    // rejection that opens a long manual block instead (see bitquery auth
+    // branch). Only upstream/retryable failures reject so opossum can open
+    // the circuit on them.
+    if (s.error && s.kind !== 'ok' && s.kind !== 'client' && s.kind !== 'quota' && s.kind !== 'auth') {
       const e = new Error(s.error);
       if (s.retryAfterMs) e.retryAfterMs = s.retryAfterMs;
       throw e;
@@ -93,6 +95,7 @@ const dexBreaker = new CircuitBreaker(
 
 let quotaOpenUntil = 0;
 let dexQuotaOpenUntil = 0;
+let authOpenUntil = 0;
 let now = () => Date.now();
 
 export function initDataLayer({ bitqueryResolver: bq, dexResolver: dx, timeFn } = {}) {
@@ -158,13 +161,11 @@ function classify(res) {
   // manual open). 429 = transient throttle -> retryable, honoring Retry-After.
   if (status === 429) return { kind: 'retryable' };
   if (status === 402) return { kind: 'quota' };
+  // 401 = the key is being rejected: never retried, never negative-cached,
+  // forces a long manual open + loud log (see bitquery auth branch).
+  if (status === 401) return { kind: 'auth' };
   const quota = quoteRe.test(msg);
   if (quota) return { kind: 'quota' };
-  // 401 (auth) is transient for Bitquery (intermittent Unauthorized under
-  // rate-limited bursts), so retry it rather than negative-caching: a single
-  // flake must not brick a query for the negative-cache TTL. Other 4xx mean
-  // the query itself (or its dataset/plan) is bad -> permanent, cacheable.
-  if (status === 401) return { kind: 'retryable' };
   if (status >= 400 && status < 500) return { kind: 'client' };
   return { kind: 'retryable' };
 }
@@ -220,29 +221,44 @@ function queryHash(query) {
   return h.toString(36);
 }
 
-function negativeCacheGet(query, started) {
+function negativeCacheGet(query) {
   const entry = negativeCache.get(queryHash(query));
   if (!entry) return null;
-  if (now() - entry.at <= config.negativeCacheTtlMs) {
+  if (now() <= entry.expiresAt) {
     return { ...entry.res, cached: true, at: entry.at };
   }
   negativeCache.delete(queryHash(query));
   return null;
 }
 
-function negativeCacheSet(query, res) {
-  negativeCache.set(queryHash(query), { at: now(), res: { error: res.error, status: res.status, data: null } });
+function negativeCacheSet(query, res, ttlMs) {
+  negativeCache.set(queryHash(query), {
+    at: now(),
+    expiresAt: now() + (ttlMs || config.negativeCacheTtlMs),
+    res: { error: res.error, status: res.status, data: null },
+  });
 }
 
-export async function bitquery(query, label = '', { feed = 'data', priority = 'user' } = {}) {
+// Caches a successful-but-empty result (well-formed key with no backing data)
+// so identical lookups stop spending calls until the marker expires. Returned
+// on repeat as { status: 200, data: null, empty: true, cached: true }.
+function cacheEmpty(query, ttlMs) {
+  negativeCache.set(queryHash(query), {
+    at: now(),
+    expiresAt: now() + (ttlMs || config.negativeCacheTtlMs),
+    res: { error: undefined, status: 200, data: null, empty: true },
+  });
+}
+
+export async function bitquery(query, label = '', { feed = 'data', priority = 'user', emptyTtlMs, isEmpty } = {}) {
   const started = now();
   if (!isFeedEnabled(feed)) return { error: 'FEED_DISABLED', status: 503, data: null, feed };
-  const cached = negativeCacheGet(query, started);
+  const cached = negativeCacheGet(query);
   if (cached) return cached;
   let attempt = 0;
   for (;;) {
     if (!budget.canFire()) return { error: 'BUDGET_EXHAUSTED', status: 429, data: null };
-    if (breakerIsOpen(bitqueryBreaker) || now() < quotaOpenUntil) return { error: 'bitquery breaker open', status: 503, data: null };
+    if (breakerIsOpen(bitqueryBreaker) || now() < quotaOpenUntil || now() < authOpenUntil) return { error: 'bitquery breaker open', status: 503, data: null };
     await bitqueryBucket.take();
     if (now() - started > config.requestTimeoutMs) return { error: 'request time budget exceeded', status: 0, data: null };
     let res;
@@ -257,13 +273,26 @@ export async function bitquery(query, label = '', { feed = 'data', priority = 'u
       console.log(`[DATA] bitquery quota hit (${label}): blocking upstream for ${config.breakerQuotaOpenMs}ms`);
       return { error: res.error, status: 402, data: null };
     }
+    if (res.kind === 'auth') {
+      // Credential rejection: do not retry, do not negative-cache, open a long
+      // manual block, and log loudly so ops sees the key is being turned away.
+      authOpenUntil = now() + config.authBreakerOpenMs;
+      console.error(`[DATA] bitquery AUTH failure (${label}): ${res.error} — blocking upstream for ${config.authBreakerOpenMs}ms`);
+      return { error: res.error, status: 401, data: null };
+    }
     if (res.kind === 'client') {
       // Permanent for this query (bad syntax, forbidden dataset/plan):
       // negative-cache it (~10 min) so identical lookups spend no calls.
       negativeCacheSet(query, res);
       return { error: res.error, status: res.status || 400, data: null };
     }
-    if (!res.error) return res;
+    if (!res.error) {
+      if (isEmpty && isEmpty(res.data)) {
+        cacheEmpty(query, emptyTtlMs);
+        return { status: 200, data: null, empty: true, cached: false };
+      }
+      return res;
+    }
     attempt += 1;
     if (attempt >= config.retryMax) return res;
     if (now() - started > config.requestTimeoutMs) return res;
@@ -322,7 +351,7 @@ export async function dexBatch(mints, { feed = 'dexscreener', timeoutMs } = {}) 
   return merged;
 }
 
-export async function fetch({ key, feed = 'data', freshTtlMs, staleTtlMs, priority = 'user', force = false, request }) {
+export async function fetch({ key, feed = 'data', freshTtlMs, staleTtlMs, priority = 'user', force = false, passiveStale = false, request }) {
   if (!isFeedEnabled(feed)) return { unavailable: true, code: 'FEED_DISABLED' };
   if (!config.enabled) {
     try {
@@ -340,7 +369,10 @@ export async function fetch({ key, feed = 'data', freshTtlMs, staleTtlMs, priori
     const age = now() - hit.ts;
     if (age <= freshMs) return { data: hit.data, fresh: true, updatedAt: hit.ts };
     if (age <= staleMs) {
-      scheduleRevalidate(key, { feed, freshTtlMs, staleTtlMs, request });
+      // passiveStale: serve old data WITHOUT starting a background refresh.
+      // Used where refreshes are owned by an internal scheduler (tokenDetail
+      // watch) so a client poll can never spend an upstream call.
+      if (!passiveStale) scheduleRevalidate(key, { feed, freshTtlMs, staleTtlMs, request });
       return { data: hit.data, fresh: false, stale: true, updatedAt: hit.ts };
     }
   }
@@ -548,6 +580,7 @@ export function resetCacheState() {
   dexBucket.reset();
   quotaOpenUntil = 0;
   dexQuotaOpenUntil = 0;
+  authOpenUntil = 0;
 }
 
 export const internals = {
@@ -560,6 +593,8 @@ export const internals = {
   isFeedEnabled,
   classifyWithStatus,
   negativeCache,
+  cacheEmpty,
+  authOpenUntil: () => authOpenUntil,
 };
 
 export default {

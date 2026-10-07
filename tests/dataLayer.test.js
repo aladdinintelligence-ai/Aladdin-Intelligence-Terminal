@@ -114,6 +114,29 @@ describe('layer fetch cache semantics', () => {
     assert.equal(calls, 2); // background revalidation happened once
   });
 
+  test('passiveStale serves stale without any background revalidation', async () => {
+    let calls = 0;
+    await fetch({
+      key: 'f:passive',
+      freshTtlMs: 1,
+      staleTtlMs: 60_000,
+      passiveStale: true,
+      request: async () => { calls += 1; return { v: calls }; },
+    });
+    await new Promise((r) => setTimeout(r, 5));
+    const stale = await fetch({
+      key: 'f:passive',
+      freshTtlMs: 1,
+      staleTtlMs: 60_000,
+      passiveStale: true,
+      request: async () => { calls += 1; return { v: calls }; },
+    });
+    assert.equal(stale.stale, true);
+    assert.equal(stale.data.v, 1);
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(calls, 1); // no refresh was scheduled off the read
+  });
+
   test('identical concurrent requests coalesce into one upstream call', async () => {
     let calls = 0;
     const p1 = fetch({ key: 'f:co', request: async () => { calls += 1; await new Promise((r) => setTimeout(r, 20)); return { ok: true }; } });
@@ -183,6 +206,65 @@ describe('bitquery transport', () => {
     });
     const res = await bitquery('{ bad', 't', { feed: 'tl' });
     assert.equal(res.error, 'bad syntax');
+    assert.equal(calls, 1);
+  });
+
+  test('401 classifies as auth (never a cached client error)', () => {
+    const cls = internals.classifyWithStatus({ error: 'Unauthorized. Provide Authorization header with a valid JWT token.', status: 401 });
+    assert.equal(cls.kind, 'auth');
+  });
+
+  test('auth 401 is not retried, opens long, and logs loudly', async () => {
+    let calls = 0;
+    initDataLayer({
+      bitqueryResolver: async () => {
+        calls += 1;
+        return { error: 'Unauthorized. Provide Authorization header with a valid JWT token.', status: 401 };
+      },
+    });
+    const logs = [];
+    const origError = console.error;
+    console.error = (...a) => { logs.push(a.join(' ')); };
+    try {
+      const first = await bitquery('{ q }', 't', { feed: 'auth' });
+      assert.equal(first.status, 401);
+      assert.equal(calls, 1); // no retry
+      assert.equal(logs.some((l) => /AUTH|401/i.test(l)), true); // loud
+      assert.ok(internals.authOpenUntil() > Date.now());
+      const blocked = await bitquery('{ q }', 't', { feed: 'auth' });
+      assert.match(blocked.error, /breaker/);
+      assert.equal(calls, 1); // long manual open kept calls off the wire
+    } finally {
+      console.error = origError;
+    }
+  });
+
+  test('empty ok results are negative-cached for emptyTtlMs; repeats spend no calls', async () => {
+    let calls = 0;
+    const isEmpty = (d) => !(d && d.Solana && d.Solana.DEXTradeByTokens && d.Solana.DEXTradeByTokens.length);
+    initDataLayer({
+      bitqueryResolver: async () => { calls += 1; return { data: { Solana: { DEXTradeByTokens: [] } } }; },
+    });
+    const first = await bitquery('{ empty }', 't', { feed: 'tl', emptyTtlMs: 60_000, isEmpty });
+    assert.equal(first.empty, true);
+    assert.equal(first.data, null);
+    assert.equal(calls, 1);
+    const second = await bitquery('{ empty }', 't', { feed: 'tl', emptyTtlMs: 60_000, isEmpty });
+    assert.equal(second.cached, true);
+    assert.equal(second.empty, true);
+    assert.equal(second.data, null);
+    assert.equal(calls, 1); // served from cache, no upstream
+  });
+
+  test('populated results are never empty-cached', async () => {
+    let calls = 0;
+    const isEmpty = (d) => !(d && d.Solana && d.Solana.DEXTradeByTokens && d.Solana.DEXTradeByTokens.length);
+    initDataLayer({
+      bitqueryResolver: async () => { calls += 1; return { data: { Solana: { DEXTradeByTokens: [{ id: 'x' }] } } }; },
+    });
+    const res = await bitquery('{ data }', 't', { feed: 'tl', emptyTtlMs: 60_000, isEmpty });
+    assert.equal(res.empty, undefined);
+    assert.equal(res.data.Solana.DEXTradeByTokens.length, 1);
     assert.equal(calls, 1);
   });
 });
