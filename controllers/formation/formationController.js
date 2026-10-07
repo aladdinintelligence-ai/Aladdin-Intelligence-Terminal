@@ -1,10 +1,5 @@
-import axios from 'axios';
-import { graphql as providerGraphql, provider as dataProvider } from '../../providers/index.js';
-
-const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex/tokens';
-const cache = new Map();
-const inflight = new Map();
-const CACHE_TTL = 120_000;
+import { provider as dataProvider } from '../../providers/index.js';
+import dl from '../../providers/dataLayer.js';
 
 // Candidate pool: top traded meme tokens over 7d, then market-quality threshold.
 const CANDIDATE_LIMIT = 200;
@@ -37,11 +32,13 @@ const colors = [
   '#f0a640', '#6b83ee', '#8990a0',
 ];
 
-function isQuotaError(err) {
-  const message = err?.message || '';
-  return message.includes('402')
-    || message.includes('429')
-    || /quota|points limit|rate limit|session limit|concurrent/i.test(message);
+// Provider queries flow through the data layer: budget gate, token bucket,
+// circuit breaker and retry/backoff are handled there. Errors are thrown
+// upward so the dl.fetch wrapper can serve stale or { unavailable }.
+async function dlBq(query, label) {
+  const res = await dl.bitquery(query, label, { feed: 'formation', priority: 'user' });
+  if (res.error) throw new Error(res.error);
+  return res;
 }
 
 function generateColor(mint) {
@@ -66,17 +63,6 @@ function sinceIso(hours) {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 }
 
-async function gqlWithRetry(query, label, attempts = 2) {
-  let result = await providerGraphql(query, label);
-  for (let attempt = 1; attempt < attempts; attempt++) {
-    const transient = result.error && /socket|aborted|timeout|hang up|ECONNRESET|408/i.test(result.error);
-    if (!transient) break;
-    await new Promise(function (resolve) { setTimeout(resolve, 900); });
-    result = await providerGraphql(query, label);
-  }
-  return result;
-}
-
 // Top traded meme tokens over 7d: freshly formed and still-forming candidates.
 async function fetchVolumeLeaders() {
   const since7d = sinceIso(24 * 7);
@@ -98,8 +84,7 @@ async function fetchVolumeLeaders() {
     }
   }`;
 
-  const { error, data } = await gqlWithRetry(query, ':fm:leaders');
-  if (error) throw new Error(error);
+  const { data } = await dlBq(query, ':fm:leaders');
 
   const leaders = [];
   const seen = new Set();
@@ -118,24 +103,16 @@ async function fetchVolumeLeaders() {
 }
 
 // Every pool token's DexScreener pairs: market metrics and the Raydium vs
-// Pump.fun AMM volume split used to measure migration progress.
+// Pump.fun AMM volume split used to measure migration progress. The data
+// layer batches (30/chunk), rate-limits and retries; a caller error throws.
 async function fetchPairsByMint(mints) {
+  const res = await dl.dexBatch(mints, { feed: 'formation' });
+  if (res.error) throw new Error(res.error);
   const pairsByMint = new Map();
-  const chunks = [];
-  for (let i = 0; i < mints.length; i += 30) chunks.push(mints.slice(i, i + 30));
-  await Promise.all(chunks.slice(0, 8).map(async function (batch) {
-    try {
-      const { data } = await axios.get(DEXSCREENER_API + '/' + batch.join(','), { timeout: 10000 });
-      for (const pair of (data && data.pairs) || []) {
-        const addr = pair && pair.baseToken && pair.baseToken.address;
-        if (!addr) continue;
-        if (!pairsByMint.has(addr)) pairsByMint.set(addr, []);
-        pairsByMint.get(addr).push(pair);
-      }
-    } catch (err) {
-      console.error('[formation] DexScreener fetch failed:', err.message);
-    }
-  }));
+  for (const mint of mints) {
+    const pairs = (res[mint] || []).filter(function (p) { return p && p.baseToken && p.baseToken.address === mint; });
+    if (pairs.length) pairsByMint.set(mint, pairs);
+  }
   return pairsByMint;
 }
 
@@ -207,8 +184,7 @@ async function fetchTradeRows(mints) {
         }
       }
     }`;
-    return gqlWithRetry(query, ':fm:trades:' + (idx + 1)).then(function (res) {
-      if (res.error) throw new Error(res.error);
+    return dlBq(query, ':fm:trades:' + (idx + 1)).then(function (res) {
       return (res.data && res.data.Solana && res.data.Solana.DEXTradeByTokens) || [];
     });
   });
@@ -343,10 +319,6 @@ function formationStrength(m) {
   return score;
 }
 
-function topNScaled(top10) {
-  return Math.min(top10 / 100, 1);
-}
-
 function formationWhy(m) {
   const parts = [];
   if (m.formation === 'DISCOVERY') {
@@ -370,20 +342,30 @@ function buildMeta(count, coverage, marketError) {
   };
 }
 
-async function buildFormationResponse(limit) {
-  const cacheKey = 'formation:' + limit;
+function emptyResponse(message, marketError) {
+  return { data: [], meta: buildMeta(0, message, marketError) };
+}
 
+async function buildFormationResponse(limit) {
   const leaders = await fetchVolumeLeaders();
   if (leaders.length === 0) {
-    const empty = { data: [], meta: buildMeta(0, 'No candidate tokens were available for formation scoring.') };
-    cache.set(cacheKey, { data: empty, ts: Date.now() });
-    return empty;
+    return emptyResponse('No candidate tokens were available for formation scoring.', false);
   }
 
-  const pairsByMint = await fetchPairsByMint(leaders.map(function (t) { return t.mint; }));
+  // Market detail (DexScreener) is best-effort: when it fails the formation
+  // metrics built from on-chain trades still stand, but the source label and
+  // coverage must say so truthfully.
+  let pairsByMint;
+  let marketError = false;
+  try {
+    pairsByMint = await fetchPairsByMint(leaders.map(function (t) { return t.mint; }));
+  } catch (exc) {
+    console.error('[formation] DexScreener fetch failed:', exc.message);
+    marketError = true;
+    pairsByMint = new Map();
+  }
 
   const pool = [];
-  let marketError = false;
   for (const leader of leaders) {
     const pairs = pairsByMint.get(leader.mint);
     if (!pairs || pairs.length === 0) continue;
@@ -407,10 +389,12 @@ async function buildFormationResponse(limit) {
     });
   }
 
+  const marketDownMessage = 'Formation metrics live from the last 48h of sampled DEX trades; market detail temporarily unavailable.';
   if (pool.length === 0) {
-    const empty = { data: [], meta: buildMeta(0, 'No forming tokens matched the current market thresholds.') };
-    cache.set(cacheKey, { data: empty, ts: Date.now() });
-    return empty;
+    return emptyResponse(
+      marketError ? marketDownMessage : 'No forming tokens matched the current market thresholds.',
+      marketError
+    );
   }
 
   pool.sort(function (a, b) { return b.volume24h - a.volume24h; });
@@ -507,56 +491,37 @@ async function buildFormationResponse(limit) {
   });
 
   const coverage = marketError
-    ? 'Formation metrics live from the last 48h of sampled DEX trades; market detail temporarily unavailable.'
+    ? marketDownMessage
     : 'Formation stage, participation breadth, buyer concentration, share of buyers still buying in the final 12h of the sample, profitable-wallet share and sell pressure derive from 48h of sampled DEX trades on Bitquery across the top traded Solana meme tokens. Market cap, liquidity, volume, 24h change and age come from DexScreener pairs; migration share is the volume routed on mature AMMs (Raydium, Meteora) versus bonding-curve AMMs (Pump.fun, PumpSwap). Stages are heuristic labels of observed recent structure, not publisher ratings.';
 
-  const response = { data, meta: buildMeta(data.length, coverage, marketError) };
-  cache.set(cacheKey, { data: response, ts: Date.now() });
-  return response;
-}
-
-// One build per cache key at a time: warm refresh and inbound requests share
-// the same provider scan instead of doubling concurrent query load.
-function buildOrJoin(limit) {
-  const cacheKey = 'formation:' + limit;
-  const existing = inflight.get(cacheKey);
-  if (existing) return existing;
-  const pending = buildFormationResponse(limit);
-  inflight.set(cacheKey, pending);
-  pending.finally(function () { inflight.delete(cacheKey); }).catch(function () { /* swallowed by caller */ });
-  return pending;
+  return { data, meta: buildMeta(data.length, coverage, marketError) };
 }
 
 export async function getFormationController(req, res, next) {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 30);
   try {
-    const cached = cache.get('formation:' + limit);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      return res.json(cached.data);
-    }
+    const out = await dl.fetch({
+      key: 'formation:' + limit,
+      feed: 'formation',
+      priority: 'user',
+      request: () => buildFormationResponse(limit),
+    });
 
-    return res.json(await buildOrJoin(limit));
-  } catch (exc) {
-    const stale = cache.get('formation:' + limit);
-    if (stale && stale.data && stale.data.data) {
-      return res.json(stale.data);
-    }
-    if (isQuotaError(exc)) {
+    if (out.unavailable) {
       return res.status(503).json({
-        error: 'provider_quota',
-        message: 'Live formation analytics are temporarily unavailable. Please try again in a few minutes.',
+        error: 'upstream_unavailable',
+        message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
       });
     }
-    return next(exc);
-  }
-}
 
-async function refreshDefaultCache() {
-  try {
-    await buildOrJoin(20);
-  } catch (err) {
-    console.error('[formation] cache refresh failed:', err.message);
+    const response = out.data;
+    if (out.stale && response.meta) response.meta.stale = true;
+    return res.json(response);
+  } catch (exc) {
+    console.error('[formation] handler error:', exc && exc.message ? exc.message : exc);
+    return res.status(502).json({
+      error: 'upstream_unavailable',
+      message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
+    });
   }
 }
-setTimeout(refreshDefaultCache, 9000);
-setInterval(refreshDefaultCache, 116_000);
