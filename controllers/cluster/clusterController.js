@@ -1,8 +1,5 @@
-import { graphql as providerGraphql, provider as dataProvider } from '../../providers/index.js';
-
-const cache = new Map();
-const inflight = new Map();
-const CACHE_TTL = 120_000;
+import { provider as dataProvider } from '../../providers/index.js';
+import dl from '../../providers/dataLayer.js';
 
 const CANDIDATE_LIMIT = 200;
 const SCAN_TOKEN_COUNT = 60;
@@ -38,11 +35,13 @@ const colors = [
   '#f0a640', '#6b83ee', '#8990a0',
 ];
 
-function isQuotaError(err) {
-  const message = err?.message || '';
-  return message.includes('402')
-    || message.includes('429')
-    || /quota|points limit|rate limit|session limit|concurrent/i.test(message);
+// Provider queries flow through the data layer: budget gate, token bucket,
+// circuit breaker and retry/backoff are handled there. Errors are thrown
+// upward so the dl.fetch wrapper can serve stale or { unavailable }.
+async function dlBq(query, label) {
+  const res = await dl.bitquery(query, label, { feed: 'cluster', priority: 'user' });
+  if (res.error) throw new Error(res.error);
+  return res;
 }
 
 function generateColor(seed) {
@@ -60,27 +59,6 @@ function shortAddress(address) {
 
 function sinceIso(hours) {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-}
-
-async function gqlWithRetry(query, label, attempts = 2) {
-  let result = await providerGraphql(query, label);
-  for (let attempt = 1; attempt < attempts; attempt++) {
-    const transient = result.error && /socket|aborted|timeout|hang up|ECONNRESET|408/i.test(result.error);
-    if (transient) {
-      await new Promise(function (resolve) { setTimeout(resolve, 900); });
-      result = await providerGraphql(query, label);
-      continue;
-    }
-    // Session-limit bursts heal quickly; back off briefly and retry once.
-    const quota = result.error && /429|session limit|concurrent|quota|rate limit/i.test(result.error);
-    if (quota && attempt === 1) {
-      await new Promise(function (resolve) { setTimeout(resolve, 1600); });
-      result = await providerGraphql(query, label);
-      continue;
-    }
-    break;
-  }
-  return result;
 }
 
 // Top traded meme tokens over 7d: the token universe for overlap detection.
@@ -104,8 +82,7 @@ async function fetchVolumeLeaders() {
     }
   }`;
 
-  const { error, data } = await gqlWithRetry(query, ':cluster:leaders');
-  if (error) throw new Error(error);
+  const { data } = await dlBq(query, ':cluster:leaders');
 
   const leaders = [];
   const seen = new Set();
@@ -150,8 +127,7 @@ async function fetchRecentTrades(mints) {
         }
       }
     }`;
-    return gqlWithRetry(query, ':cluster:recent:' + (idx + 1)).then(function (res) {
-      if (res.error) throw new Error(res.error);
+    return dlBq(query, ':cluster:recent:' + (idx + 1)).then(function (res) {
       return (res.data && res.data.Solana && res.data.Solana.DEXTradeByTokens) || [];
     });
   });
@@ -254,256 +230,232 @@ function buildMeta(count, coverage) {
   };
 }
 
-function buildClustersResponse(limit) {
-  const cacheKey = 'clusters:' + limit;
-  return (async () => {
-    const leaders = await fetchVolumeLeaders();
-    if (leaders.length === 0) {
-      const empty = { data: [], meta: buildMeta(0, 'No candidate tokens were available for cluster screening.') };
-      cache.set(cacheKey, { data: empty, ts: Date.now() });
-      return empty;
-    }
+async function buildClustersResponse(limit) {
+  const leaders = await fetchVolumeLeaders();
+  if (leaders.length === 0) {
+    return { data: [], meta: buildMeta(0, 'No candidate tokens were available for cluster screening.') };
+  }
 
-    const scanned = leaders.slice(0, SCAN_TOKEN_COUNT);
-    const rows = await fetchRecentTrades(scanned.map(function (t) { return t.mint; }));
-    const { walletTokens, tokenSymbol } = recentLegsByWallet(rows);
+  const scanned = leaders.slice(0, SCAN_TOKEN_COUNT);
+  const rows = await fetchRecentTrades(scanned.map(function (t) { return t.mint; }));
+  const { walletTokens, tokenSymbol } = recentLegsByWallet(rows);
 
-    // Restrict coordination candidates to wallets active across ≥2 tokens.
-    const multiToken = [];
-    for (const [wallet, tokens] of walletTokens) {
-      if (tokens.size < 2) continue;
-      let activity = 0;
-      for (const leg of tokens.values()) activity += leg.buyUsd + leg.sellUsd;
-      multiToken.push({ wallet, tokens, activity });
-      if (tokens.size > MAX_WALLET_TOKENS) {
-        // Bound memory: keep the most active tokens per wallet.
-        const sorted = [...tokens.keys()].sort(function (a, b) {
-          return (tokens.get(b).buyUsd + tokens.get(b).sellUsd) - (tokens.get(a).buyUsd + tokens.get(a).sellUsd);
-        });
-        for (const key of sorted.slice(MAX_WALLET_TOKENS)) tokens.delete(key);
-      }
-    }
-    const byWallet = new Map(multiToken.map(function (m) { return [m.wallet, m]; }));
-
-    // Per-token capped candidate lists (top by activity), bounded for pairing.
-    const tokenCandidates = new Map();
-    for (const { wallet, tokens } of multiToken) {
-      for (const mint of tokens.keys()) {
-        if (!tokenCandidates.has(mint)) tokenCandidates.set(mint, []);
-        const list = tokenCandidates.get(mint);
-        list.push(wallet);
-      }
-    }
-    for (const list of tokenCandidates.values()) {
-      list.sort(function (a, b) {
-        const aAct = byWallet.get(a).activity;
-        const bAct = byWallet.get(b).activity;
-        return bAct - aAct;
+  // Restrict coordination candidates to wallets active across ≥2 tokens.
+  const multiToken = [];
+  for (const [wallet, tokens] of walletTokens) {
+    if (tokens.size < 2) continue;
+    let activity = 0;
+    for (const leg of tokens.values()) activity += leg.buyUsd + leg.sellUsd;
+    multiToken.push({ wallet, tokens, activity });
+    if (tokens.size > MAX_WALLET_TOKENS) {
+      // Bound memory: keep the most active tokens per wallet.
+      const sorted = [...tokens.keys()].sort(function (a, b) {
+        return (tokens.get(b).buyUsd + tokens.get(b).sellUsd) - (tokens.get(a).buyUsd + tokens.get(a).sellUsd);
       });
-      list.length = Math.min(list.length, MAX_TOKEN_CAPS);
+      for (const key of sorted.slice(MAX_WALLET_TOKENS)) tokens.delete(key);
     }
+  }
+  const byWallet = new Map(multiToken.map(function (m) { return [m.wallet, m]; }));
 
-    // Candidate pairs: wallets co-listed on the same token's capped set.
-    const pairInfo = new Map();
-    for (const [mint, list] of tokenCandidates) {
-      for (let i = 0; i < list.length; i++) {
-        for (let j = i + 1; j < list.length; j++) {
-          const a = list[i];
-          const b = list[j];
-          const key = a < b ? a + '|' + b : b + '|' + a;
-          if (!pairInfo.has(key)) {
-            pairInfo.set(key, { wallets: [a, b], shared: 0, coCount: 0 });
-          }
-          pairInfo.get(key).shared++;
-        }
-      }
+  // Per-token capped candidate lists (top by activity), bounded for pairing.
+  const tokenCandidates = new Map();
+  for (const { wallet, tokens } of multiToken) {
+    for (const mint of tokens.keys()) {
+      if (!tokenCandidates.has(mint)) tokenCandidates.set(mint, []);
+      const list = tokenCandidates.get(mint);
+      list.push(wallet);
     }
-
-    // Refine pairs: exact intersection + near-simultaneous co-movement.
-    const coWindow = CO_WINDOW_MINUTES * 60 * 1000;
-    for (const [key, pair] of pairInfo) {
-      const a = byWallet.get(pair.wallets[0]);
-      const b = byWallet.get(pair.wallets[1]);
-      let shared = 0;
-      let coCount = 0;
-      for (const [mint, legA] of a.tokens) {
-        const legB = b.tokens.get(mint);
-        if (!legB) continue;
-        shared++;
-        if (Math.abs(legA.minTime - legB.minTime) <= coWindow) coCount++;
-      }
-      pair.shared = shared;
-      pair.coCount = coCount;
-    }
-
-    // Union-find: repeated (≥2) timed co-movements link wallets into clusters.
-    const uf = new UnionFind();
-    const qualifyingPairs = [];
-    for (const pair of pairInfo.values()) {
-      if (pair.coCount >= MIN_COOCCURRENCE) {
-        uf.union(pair.wallets[0], pair.wallets[1]);
-        qualifyingPairs.push(pair);
-      }
-    }
-
-    const clusters = [];
-    let serial = 0;
-    for (const members of uf.groups().values()) {
-      if (members.length < MIN_CLUSTER_MEMBERS) continue;
-      // Components this large are connectivity artifacts of hot tokens and
-      // bot/aggregator congestion, not wallet coordination - drop them.
-      if (members.length > MAX_CLUSTER_MEMBERS) continue;
-      serial++;
-      const membersSet = new Set(members);
-      let clusterCoMoves = 0;
-      for (const pair of qualifyingPairs) {
-        if (pair.coCount >= MIN_COOCCURRENCE && membersSet.has(pair.wallets[0]) && membersSet.has(pair.wallets[1])) {
-          clusterCoMoves += pair.coCount;
-        }
-      }
-
-      // Full-scope metrics across every token each member traded.
-      const tokenParticipation = new Map();
-      let buyUsd = 0;
-      let sellUsd = 0;
-      let firstSeen = Infinity;
-      let lastSeen = 0;
-      const memberRows = [];
-      for (const wallet of members) {
-        const row = byWallet.get(wallet);
-        if (!row) continue;
-        let memberTokens = 0;
-        for (const [mint, leg] of row.tokens) {
-          if (!tokenParticipation.has(mint)) tokenParticipation.set(mint, { count: 0, weight: 0 });
-          const p = tokenParticipation.get(mint);
-          p.count++;
-          p.weight += leg.buyUsd + leg.sellUsd;
-          memberTokens++;
-          buyUsd += leg.buyUsd;
-          sellUsd += leg.sellUsd;
-          if (leg.minTime < firstSeen) firstSeen = leg.minTime;
-          if (leg.maxTime > lastSeen) lastSeen = leg.maxTime;
-        }
-        memberRows.push({ wallet, tokenCount: memberTokens });
-      }
-
-      const sharedTokens = [];
-      for (const [mint, p] of tokenParticipation) {
-        if (p.count >= 2) sharedTokens.push({ mint, participants: p.count, weight: p.weight });
-      }
-      sharedTokens.sort(function (a, b) { return b.participants - a.participants || b.weight - a.weight; });
-
-      const topTokens = sharedTokens.slice(0, 3).map(function (t) {
-        return { mint: t.mint, symbol: tokenSymbol.get(t.mint) || t.mint.slice(0, 4).toUpperCase() };
-      });
-
-      memberRows.sort(function (a, b) { return b.tokenCount - a.tokenCount; });
-
-      const net = sellUsd - buyUsd;
-      const pressure = buyUsd + sellUsd > 0 ? ((sellUsd - buyUsd) / (buyUsd + sellUsd)) * 100 : null;
-      const now = Date.now();
-      const isNew = firstSeen > now - 24 * 3600 * 1000;
-      const isChanged = lastSeen > now - 6 * 3600 * 1000;
-      const signal = pressure != null && Math.abs(pressure) >= 40 && sharedTokens.length >= 2;
-      const highSignal = signal && members.length >= 4 && sharedTokens.length >= 3;
-
-      const cluster = {
-        id: 'cluster-' + serial,
-        name: 'Cluster ' + serial,
-        color: generateColor('cluster-' + serial + '-' + members.length),
-        walletCount: members.length,
-        tokenCount: tokenParticipation.size,
-        sharedTokenCount: sharedTokens.length,
-        coMovements: clusterCoMoves,
-        members: memberRows.slice(0, 6).map(function (m) {
-          return { id: shortAddress(m.wallet), address: m.wallet, tokenCount: m.tokenCount };
-        }),
-        topTokens,
-        representativeMint: topTokens[0] ? topTokens[0].mint : scanned[0].mint,
-        representativeSymbol: topTokens[0] ? topTokens[0].symbol : scanned[0].symbol,
-        netUsd: Math.round(net),
-        pressure: pressure != null ? Math.round(pressure) : null,
-        buyUsd: Math.round(buyUsd),
-        sellUsd: Math.round(sellUsd),
-        firstSeen: new Date(firstSeen).toISOString(),
-        lastSeen: new Date(lastSeen).toISOString(),
-        stage: clusterStage(pressure),
-        signal,
-        isNew,
-        isChanged,
-        highSignal,
-        why: '',
-      };
-      cluster.why = clusterWhy(cluster);
-      clusters.push(cluster);
-    }
-
-    // Strongest, most-connected clusters first.
-    clusters.sort(function (a, b) {
-      const ap = a.pressure != null ? Math.abs(a.pressure) : 0;
-      const bp = b.pressure != null ? Math.abs(b.pressure) : 0;
-      return (bp - ap) || (b.coMovements - a.coMovements) || (b.walletCount - a.walletCount);
+  }
+  for (const list of tokenCandidates.values()) {
+    list.sort(function (a, b) {
+      const aAct = byWallet.get(a).activity;
+      const bAct = byWallet.get(b).activity;
+      return bAct - aAct;
     });
-    clusters.forEach(function (c, i) {
-      c.id = 'cluster-' + (i + 1);
-      c.name = 'Cluster ' + (i + 1);
+    list.length = Math.min(list.length, MAX_TOKEN_CAPS);
+  }
+
+  // Candidate pairs: wallets co-listed on the same token's capped set.
+  const pairInfo = new Map();
+  for (const [mint, list] of tokenCandidates) {
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i];
+        const b = list[j];
+        const key = a < b ? a + '|' + b : b + '|' + a;
+        if (!pairInfo.has(key)) {
+          pairInfo.set(key, { wallets: [a, b], shared: 0, coCount: 0 });
+        }
+        pairInfo.get(key).shared++;
+      }
+    }
+  }
+
+  // Refine pairs: exact intersection + near-simultaneous co-movement.
+  const coWindow = CO_WINDOW_MINUTES * 60 * 1000;
+  for (const [key, pair] of pairInfo) {
+    const a = byWallet.get(pair.wallets[0]);
+    const b = byWallet.get(pair.wallets[1]);
+    let shared = 0;
+    let coCount = 0;
+    for (const [mint, legA] of a.tokens) {
+      const legB = b.tokens.get(mint);
+      if (!legB) continue;
+      shared++;
+      if (Math.abs(legA.minTime - legB.minTime) <= coWindow) coCount++;
+    }
+    pair.shared = shared;
+    pair.coCount = coCount;
+  }
+
+  // Union-find: repeated (≥2) timed co-movements link wallets into clusters.
+  const uf = new UnionFind();
+  const qualifyingPairs = [];
+  for (const pair of pairInfo.values()) {
+    if (pair.coCount >= MIN_COOCCURRENCE) {
+      uf.union(pair.wallets[0], pair.wallets[1]);
+      qualifyingPairs.push(pair);
+    }
+  }
+
+  const clusters = [];
+  let serial = 0;
+  for (const members of uf.groups().values()) {
+    if (members.length < MIN_CLUSTER_MEMBERS) continue;
+    // Components this large are connectivity artifacts of hot tokens and
+    // bot/aggregator congestion, not wallet coordination - drop them.
+    if (members.length > MAX_CLUSTER_MEMBERS) continue;
+    serial++;
+    const membersSet = new Set(members);
+    let clusterCoMoves = 0;
+    for (const pair of qualifyingPairs) {
+      if (pair.coCount >= MIN_COOCCURRENCE && membersSet.has(pair.wallets[0]) && membersSet.has(pair.wallets[1])) {
+        clusterCoMoves += pair.coCount;
+      }
+    }
+
+    // Full-scope metrics across every token each member traded.
+    const tokenParticipation = new Map();
+    let buyUsd = 0;
+    let sellUsd = 0;
+    let firstSeen = Infinity;
+    let lastSeen = 0;
+    const memberRows = [];
+    for (const wallet of members) {
+      const row = byWallet.get(wallet);
+      if (!row) continue;
+      let memberTokens = 0;
+      for (const [mint, leg] of row.tokens) {
+        if (!tokenParticipation.has(mint)) tokenParticipation.set(mint, { count: 0, weight: 0 });
+        const p = tokenParticipation.get(mint);
+        p.count++;
+        p.weight += leg.buyUsd + leg.sellUsd;
+        memberTokens++;
+        buyUsd += leg.buyUsd;
+        sellUsd += leg.sellUsd;
+        if (leg.minTime < firstSeen) firstSeen = leg.minTime;
+        if (leg.maxTime > lastSeen) lastSeen = leg.maxTime;
+      }
+      memberRows.push({ wallet, tokenCount: memberTokens });
+    }
+
+    const sharedTokens = [];
+    for (const [mint, p] of tokenParticipation) {
+      if (p.count >= 2) sharedTokens.push({ mint, participants: p.count, weight: p.weight });
+    }
+    sharedTokens.sort(function (a, b) { return b.participants - a.participants || b.weight - a.weight; });
+
+    const topTokens = sharedTokens.slice(0, 3).map(function (t) {
+      return { mint: t.mint, symbol: tokenSymbol.get(t.mint) || t.mint.slice(0, 4).toUpperCase() };
     });
-    const selected = clusters.slice(0, limit);
 
-    const coverage = 'Wallet clusters are detected from the last ' + RECENT_WINDOW_HOURS + 'h of DEX trades (Bitquery samples up to three '
-      + 'recent legs per wallet). Wallets trading the same token within a ' + CO_WINDOW_MINUTES + '-minute window on at least two different '
-      + 'tokens are linked; connected groups of ' + MIN_CLUSTER_MEMBERS + '-' + MAX_CLUSTER_MEMBERS + ' wallets form a cluster (larger '
-      + 'connected groups are congestion artifacts and are dropped). Flow and sell pressure are measured across '
-      + 'all sampled legs of cluster members. Shared timing is an observed relationship, not proof of common ownership or coordination intent.';
+    memberRows.sort(function (a, b) { return b.tokenCount - a.tokenCount; });
 
-    const response = { data: selected, meta: buildMeta(selected.length, coverage) };
-    cache.set(cacheKey, { data: response, ts: Date.now() });
-    return response;
-  })();
-}
+    const net = sellUsd - buyUsd;
+    const pressure = buyUsd + sellUsd > 0 ? ((sellUsd - buyUsd) / (buyUsd + sellUsd)) * 100 : null;
+    const now = Date.now();
+    const isNew = firstSeen > now - 24 * 3600 * 1000;
+    const isChanged = lastSeen > now - 6 * 3600 * 1000;
+    const signal = pressure != null && Math.abs(pressure) >= 40 && sharedTokens.length >= 2;
+    const highSignal = signal && members.length >= 4 && sharedTokens.length >= 3;
 
-function buildOrJoin(limit) {
-  const cacheKey = 'clusters:' + limit;
-  const existing = inflight.get(cacheKey);
-  if (existing) return existing;
-  const pending = buildClustersResponse(limit);
-  inflight.set(cacheKey, pending);
-  pending.finally(function () { inflight.delete(cacheKey); }).catch(function () { /* swallowed by caller */ });
-  return pending;
+    const cluster = {
+      id: 'cluster-' + serial,
+      name: 'Cluster ' + serial,
+      color: generateColor('cluster-' + serial + '-' + members.length),
+      walletCount: members.length,
+      tokenCount: tokenParticipation.size,
+      sharedTokenCount: sharedTokens.length,
+      coMovements: clusterCoMoves,
+      members: memberRows.slice(0, 6).map(function (m) {
+        return { id: shortAddress(m.wallet), address: m.wallet, tokenCount: m.tokenCount };
+      }),
+      topTokens,
+      representativeMint: topTokens[0] ? topTokens[0].mint : scanned[0].mint,
+      representativeSymbol: topTokens[0] ? topTokens[0].symbol : scanned[0].symbol,
+      netUsd: Math.round(net),
+      pressure: pressure != null ? Math.round(pressure) : null,
+      buyUsd: Math.round(buyUsd),
+      sellUsd: Math.round(sellUsd),
+      firstSeen: new Date(firstSeen).toISOString(),
+      lastSeen: new Date(lastSeen).toISOString(),
+      stage: clusterStage(pressure),
+      signal,
+      isNew,
+      isChanged,
+      highSignal,
+      why: '',
+    };
+    cluster.why = clusterWhy(cluster);
+    clusters.push(cluster);
+  }
+
+  // Strongest, most-connected clusters first.
+  clusters.sort(function (a, b) {
+    const ap = a.pressure != null ? Math.abs(a.pressure) : 0;
+    const bp = b.pressure != null ? Math.abs(b.pressure) : 0;
+    return (bp - ap) || (b.coMovements - a.coMovements) || (b.walletCount - a.walletCount);
+  });
+  clusters.forEach(function (c, i) {
+    c.id = 'cluster-' + (i + 1);
+    c.name = 'Cluster ' + (i + 1);
+  });
+  const selected = clusters.slice(0, limit);
+
+  const coverage = 'Wallet clusters are detected from the last ' + RECENT_WINDOW_HOURS + 'h of DEX trades (Bitquery samples up to three '
+    + 'recent legs per wallet). Wallets trading the same token within a ' + CO_WINDOW_MINUTES + '-minute window on at least two different '
+    + 'tokens are linked; connected groups of ' + MIN_CLUSTER_MEMBERS + '-' + MAX_CLUSTER_MEMBERS + ' wallets form a cluster (larger '
+    + 'connected groups are congestion artifacts and are dropped). Flow and sell pressure are measured across '
+    + 'all sampled legs of cluster members. Shared timing is an observed relationship, not proof of common ownership or coordination intent.';
+
+  return { data: selected, meta: buildMeta(selected.length, coverage) };
 }
 
 export async function getClusterController(req, res, next) {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 30);
   try {
-    const cached = cache.get('clusters:' + limit);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      return res.json(cached.data);
-    }
+    const out = await dl.fetch({
+      key: 'clusters:' + limit,
+      feed: 'cluster',
+      priority: 'user',
+      request: () => buildClustersResponse(limit),
+    });
 
-    return res.json(await buildOrJoin(limit));
-  } catch (exc) {
-    const stale = cache.get('clusters:' + limit);
-    if (stale && stale.data && stale.data.data) {
-      return res.json(stale.data);
-    }
-    if (isQuotaError(exc)) {
+    if (out.unavailable) {
       return res.status(503).json({
-        error: 'provider_quota',
-        message: 'Live cluster screening is temporarily unavailable. Please try again in a few minutes.',
+        error: 'upstream_unavailable',
+        message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
       });
     }
-    return next(exc);
-  }
-}
 
-async function refreshDefaultCache() {
-  try {
-    await buildOrJoin(20);
-  } catch (err) {
-    console.error('[cluster] cache refresh failed:', err.message);
+    const response = out.data;
+    if (out.stale && response.meta) response.meta.stale = true;
+    return res.json(response);
+  } catch (exc) {
+    console.error('[cluster] handler error:', exc && exc.message ? exc.message : exc);
+    return res.status(502).json({
+      error: 'upstream_unavailable',
+      message: 'Live market data is temporarily unavailable. Please try again in a few minutes.',
+    });
   }
 }
-// Phase-shifted from the other controllers so the startup/interval refreshes
-// of all intelligence endpoints do not fire at the same moment.
-setTimeout(refreshDefaultCache, 15000);
-setInterval(refreshDefaultCache, 125_000);
