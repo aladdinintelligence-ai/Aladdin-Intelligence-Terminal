@@ -38,6 +38,16 @@ test("every tab is prefetched on load and hydrated from session, so switching ne
   assert.match(experience,/Retry/);
   assert.doesNotMatch(hook,/useState/);
 });
+test("mobile feed never clips metrics and spaces tokens apart",()=>{
+  assert.doesNotMatch(styles,/launchResultMeta span:last-child\{display:none\}/);
+  assert.match(styles,/launchResponsiveItem\{min-width:0;margin:0 0 10px\}/);
+  assert.match(styles,/contain-intrinsic-size:148px/);
+  assert.match(styles,/launchFeedMetrics\{display:flex;flex-wrap:wrap/);
+  assert.match(styles,/launchFeedBehaviour\{display:flex;flex-wrap:wrap/);
+  assert.doesNotMatch(styles,/launchFeedMetrics\{[^}]*overflow:hidden/);
+  assert.match(styles,/font:700 13px/);
+  assert.match(styles,/font:400 10px/);
+});
 test("cards and filter panel use responsive semantic theme surfaces",()=>{for(const value of [/var\(--surface\)/,/var\(--text-primary\)/,/var\(--brand-purple\)/,/@media\(max-width:760px\)/])assert.match(styles,value)});
 
 test("mobile renders a dedicated feed row while desktop retains its card",()=>{assert.match(experience,/LaunchTokenCard/);assert.match(experience,/LaunchFeedRow/);assert.match(styles,/\.launchTokenCard\{display:none\}/);assert.match(styles,/\.launchFeedRow\{display:grid/)});
