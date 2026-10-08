@@ -1,11 +1,13 @@
-import axios from 'axios';
+import dl from '../../providers/dataLayer.js';
 
-const JUPITER_PRICE = 'https://api.jup.ag/price/v2';
-const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex/tokens';
+const DEXSCREENER_TTL = 30_000;
 
 const cache = new Map();
-const CACHE_TTL = 30_000;
 
+// Token info is DexScreener-only (Jupiter's price/v2 endpoint has been
+// retired upstream and now always 404s). Pairs come through the data layer's
+// dexBatch so this route shares the app-wide DexScreener rate limit, retries
+// and breaker instead of hammering the API with raw axios calls.
 export async function getTokenInfoController(req, res, next) {
   try {
     const { mint } = req.params;
@@ -14,29 +16,31 @@ export async function getTokenInfoController(req, res, next) {
     }
 
     const cached = cache.get(mint);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    if (cached && Date.now() - cached.ts < DEXSCREENER_TTL) {
       return res.json(cached.data);
     }
 
-    const [priceRes, dexRes] = await Promise.allSettled([
-      axios.get(`${JUPITER_PRICE}?ids=${mint}`, { timeout: 8000 }),
-      axios.get(`${DEXSCREENER_API}/${mint}`, { timeout: 8000 }),
-    ]);
+    const result = await dl.dexBatch([mint], { feed: 'tokenInfo' });
+    if (result.error) {
+      // Upstream unavailable: transient by nature - 503 so clients retry,
+      // never a 404 "Token not found" for a token that may exist.
+      return res.status(503).json({
+        error: 'upstream_unavailable',
+        message: 'Token data is temporarily unavailable. Please try again in a few seconds.',
+      });
+    }
 
-    const priceData = priceRes.status === 'fulfilled' ? priceRes.value?.data?.data?.[mint] : null;
-    const dexPairs = dexRes.status === 'fulfilled' ? dexRes.value?.data?.pairs : null;
-    const pair = dexPairs?.[0] || null;
-
-    if (!priceData && !pair) {
+    const pair = (result[mint] || [])[0] || null;
+    if (!pair) {
       return res.status(404).json({ error: 'Token not found', mint });
     }
 
     const info = {
       mint,
-      symbol: pair?.baseToken?.symbol || priceData?.mint?.slice(0, 6).toUpperCase() || '???',
+      symbol: pair?.baseToken?.symbol || mint.slice(0, 6).toUpperCase(),
       name: pair?.baseToken?.name || 'Unknown Token',
       imageUrl: pair?.info?.imageUrl || null,
-      priceUsd: priceData?.price != null ? Number(priceData.price) : (pair?.priceUsd != null ? Number(pair.priceUsd) : null),
+      priceUsd: pair?.priceUsd != null ? Number(pair.priceUsd) : null,
       marketCapUsd: pair?.marketCap != null ? Number(pair.marketCap) : (pair?.fdv != null ? Number(pair.fdv) : null),
       liquidityUsd: pair?.liquidity?.usd != null ? Number(pair.liquidity.usd) : null,
       volume24h: pair?.volume?.h24 != null ? Number(pair.volume.h24) : null,
