@@ -2,6 +2,9 @@ import { provider as dataProvider } from '../../providers/index.js';
 import config from '../../configs/dataLayer.js';
 import dl from '../../providers/dataLayer.js';
 import coldBuildLimiter from '../../services/coldBuildLimiter.js';
+import { annotateTradesWithBehaviour } from '../../services/tradeBehaviourService.js';
+import { Token } from '../../models/index.js';
+import mongoose from 'mongoose';
 
 // ---- tokenDetail watch budget (approved plan) ----
 // Actively-watched mints (top `detailHotMintCap`) are refreshed ONLY by an
@@ -132,7 +135,7 @@ async function fetchTrades(mint) {
   }`;
   const { data } = await dlBq(query, ':trades', isEmptyTrades);
 
-  return (data?.Solana?.DEXTradeByTokens || []).map(t => ({
+  const trades = (data?.Solana?.DEXTradeByTokens || []).map(t => ({
     time: t.Block?.Time,
     side: t.Trade?.Side?.Type?.toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
     amount: parseFloat(t.Trade?.Amount) || 0,
@@ -140,6 +143,23 @@ async function fetchTrades(mint) {
     wallet: t.Trade?.Account?.Owner || '',
     signature: t.Transaction?.Signature || '',
   }));
+
+  // Creator is optional signal for the behaviour slider: tracked tokens carry
+  // it in Mongo, but a missing/falling DB must never take the trades tab down.
+  const creator = await findTokenCreator(mint);
+
+  return annotateTradesWithBehaviour(trades, creator);
+}
+
+async function findTokenCreator(mint) {
+  if (!mongoose.connection || mongoose.connection.readyState !== 1) return null;
+  try {
+    const doc = await Token.findById(mint, { creator: 1, _id: 0 }).lean();
+    return doc && doc.creator ? doc.creator : null;
+  } catch (err) {
+    console.error('[tokenDetail] creator lookup skipped:', err && err.message ? err.message : err);
+    return null;
+  }
 }
 
 async function fetchParticipants(mint) {
