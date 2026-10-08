@@ -45,8 +45,8 @@ export function LaunchFeedRow({
           <Link href={`/live/${token.mint}`}>${token.symbol}</Link>
           <span className={fresh ? "isFresh" : ""}>
             {migrated
-              ? `Migrated ${ageLabel(token.migratedMinutesAgo ?? 0)}`
-              : ageLabel(token.ageMinutes)}
+              ? `Migrated ${token.migratedMinutesAgo!=null?ageLabel(token.migratedMinutesAgo):"—"}`
+              : token.ageMinutes!=null?ageLabel(token.ageMinutes):"—"}
           </span>
         </header>
         <div className="launchFeedName">{token.name}</div>

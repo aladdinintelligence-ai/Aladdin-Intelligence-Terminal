@@ -18,6 +18,14 @@ test("migrated cards replace bonding with holders and transactions",()=>{assert.
 test("cards expose only Ask Aladdin and compact Buy actions",()=>{assert.match(card,/Ask Aladdin/);assert.match(card,/>Buy</);assert.doesNotMatch(card,/>Sell</);assert.doesNotMatch(card,/Star|Comment|Inspect wallets/)});
 test("screener supports the acceptance preset and all four groups",()=>{for(const value of [/marketCapMin:20000/,/marketCapMax:80000/,/volumeMin:20000/,/bondingMin:70/,/migrationSpecialistsMin:3/,/sniperShareMax:10/])assert.match(utilities,value);for(const group of ["Market","Lifecycle","Behaviour","Token-specific wallet context"])assert.match(filters,new RegExp(`title="${group}"`))});
 test("Launches preserves tab, filters, sort and scroll in session",()=>{for(const value of [/sessionStorage/,/scrollY/,/sort/,/filters/,/tab/])assert.match(experience,value)});
+test("age formatting is precise: sub-minute tokens resolve to seconds, never 0m",()=>{
+  assert.match(utilities,/minutes<1\)/);
+  assert.match(utilities,/Math\.max\(1,Math\.round\(minutes\*60\)\)/);
+  assert.match(utilities,/Math\.floor\(minutes\/60\)/);
+  assert.match(utilities,/Math\.floor\(minutes\/1440\)/);
+  for(const value of [/NaN/,/0m/])assert.doesNotMatch(card,value);
+  for(const value of [/migratedMinutesAgo!=null/,/ageMinutes!=null/])assert.match(card,value);
+});
 test("cards and filter panel use responsive semantic theme surfaces",()=>{for(const value of [/var\(--surface\)/,/var\(--text-primary\)/,/var\(--brand-purple\)/,/@media\(max-width:760px\)/])assert.match(styles,value)});
 
 test("mobile renders a dedicated feed row while desktop retains its card",()=>{assert.match(experience,/LaunchTokenCard/);assert.match(experience,/LaunchFeedRow/);assert.match(styles,/\.launchTokenCard\{display:none\}/);assert.match(styles,/\.launchFeedRow\{display:grid/)});

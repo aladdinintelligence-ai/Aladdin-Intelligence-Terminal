@@ -17,7 +17,7 @@ export function LaunchTokenCard({token,onBuy}:{token:LaunchToken;onBuy:(token:La
         )}
       </Link>
       <Link href={`/live/${token.mint}`}><strong>${token.symbol}</strong><span>{token.name}</span></Link>
-      <div>{token.lifecycle==="migrated"?<><b>MIGRATED</b><span>{ageLabel(token.migratedMinutesAgo??0)} ago</span></>:<span>{ageLabel(token.ageMinutes)}</span>}</div>
+      <div>{token.lifecycle==="migrated"?<><b>MIGRATED</b><span>{token.migratedMinutesAgo!=null?`${ageLabel(token.migratedMinutesAgo)} ago`:"—"}</span></>:<span>{token.ageMinutes!=null?ageLabel(token.ageMinutes):"—"}</span>}</div>
     </header>
     <div className="launchMarketGrid">
       <Metric label="MC" value={moneyCompact(token.marketCap)}/>

@@ -6,14 +6,20 @@ export const launchAcceptancePreset:LaunchFilters={...defaultLaunchFilters,marke
 
 export const moneyCompact=(value:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",notation:"compact",maximumFractionDigits:value<100000?1:2}).format(value);
 export const countCompact=(value:number)=>new Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:2}).format(value);
-export const ageLabel=(minutes:number)=>minutes<60?`${minutes}m`:minutes<1440?`${Math.floor(minutes/60)}h`:`${Math.floor(minutes/1440)}d`;
+export const ageLabel=(minutes:number):string=>{
+  if (minutes===null||!Number.isFinite(minutes))return "—";
+  if (minutes<1)return `${Math.max(1,Math.round(minutes*60))}s`;
+  if (minutes<60)return `${Math.floor(minutes)}m`;
+  if (minutes<1440)return `${Math.floor(minutes/60)}h`;
+  return `${Math.floor(minutes/1440)}d`;
+};
 
 export function volumeChange(token:LaunchToken){
   if(token.ageMinutes<60||token.previousHourVolume===null||token.previousHourVolume===0)return null;
   return Math.round(((token.volume-token.previousHourVolume)/token.previousHourVolume)*100);
 }
 
-export function volumeWindow(token:LaunchToken){return token.ageMinutes<60?`${token.ageMinutes}m`:"1H"}
+export function volumeWindow(token:LaunchToken){const a=token.ageMinutes;return a===null||!Number.isFinite(a)?"—":a<1?"<1m":a<60?`${Math.floor(a)}m`:"1H"}
 export function participantTotal(token:LaunchToken){return Object.values(token.participants).reduce((sum,value)=>sum+value,0)}
 export function participantShare(token:LaunchToken,key:"scalpers"|"unknown"){const total=participantTotal(token);return total?token.participants[key]/total*100:0}
 
