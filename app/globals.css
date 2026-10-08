@@ -1125,6 +1125,37 @@ main {
   color: #555;
   font: 9px DM Mono;
 }
+.alertList .alertAskAction {
+  display: inline-block;
+  margin: 0 13px 13px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--green);
+  font: 9px DM Mono;
+  letter-spacing: 0.09em;
+  text-decoration: none;
+}
+.alertList .alertChips {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(51, 214, 166, 0.14);
+  color: var(--green);
+  font: 8px DM Mono;
+  letter-spacing: 0.12em;
+}
+.alertList .alertContext {
+  color: #888;
+}
+.alertList a > span {
+  font: 9px DM Mono;
+  color: #888;
+}
+.alertList .alertContext {
+  margin: 3px 0 0;
+}
 .ifaPage {
   max-width: 1050px;
   margin: 0 auto;

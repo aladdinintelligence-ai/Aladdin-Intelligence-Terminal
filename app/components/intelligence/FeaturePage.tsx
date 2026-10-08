@@ -15,6 +15,8 @@ import { useFormation, type FormationToken, type FormationMeta } from "@/app/hoo
 import { useInsider, type InsiderToken, type InsiderMeta } from "@/app/hooks/useInsider";
 import { useClusters, type ClusterToken, type ClusterMeta } from "@/app/hooks/useClusters";
 import { useHistorical, type HistoricalToken, type HistoricalHero, type HistoricalMeta } from "@/app/hooks/useHistorical";
+import { useAlerts, type AlertItem, type AlertsMeta } from "@/app/hooks/useAlerts";
+import { timeAgo } from "@/app/utils/time";
 
 const copy: Record<string, { eyebrow: string; title: string; desc: string; question: string }> = {
   "movers": { eyebrow: "MARKET", title: "Movers + Why", desc: "Price movement explained through participation and ownership changes.", question: "What moved, and what changed underneath?" },
@@ -38,6 +40,7 @@ export function FeaturePage({ kind }: { kind: string }) {
   const insider = useInsider(20, kind === "insiders");
   const clusters = useClusters(20, kind === "clusters");
   const historical = useHistorical(6, kind === "historical");
+  const alerts = useAlerts(20, kind === "alerts");
   const liveMeta: { source: string; fetchedAt: string; coverage: string; askTarget?: string } | null =
     kind === "og" ? og.meta
       : kind === "smart-money" ? smart.meta
@@ -45,7 +48,8 @@ export function FeaturePage({ kind }: { kind: string }) {
           : kind === "insiders" ? insider.meta
             : kind === "clusters" ? clusters.meta
               : kind === "historical" ? historical.meta
-                : null;
+                : kind === "alerts" ? alerts.meta
+                  : null;
 
   return (
     <>
@@ -88,7 +92,7 @@ export function FeaturePage({ kind }: { kind: string }) {
        kind === "narratives" ? <PanelBoundary name="Narratives"><Narratives /></PanelBoundary> :
        kind === "clusters" ? <PanelBoundary name="Coordinated wallets"><ClusterRows tokens={clusters.tokens} meta={clusters.meta} loading={clusters.loading} error={clusters.error} filter={filter} /></PanelBoundary> :
        kind === "historical" ? <PanelBoundary name="Historical match"><HistoricalRows tokens={historical.tokens} hero={historical.hero} meta={historical.meta} loading={historical.loading} error={historical.error} filter={filter} /></PanelBoundary> :
-       kind === "alerts" ? <PanelBoundary name="Alerts"><Alerts /></PanelBoundary> :
+       kind === "alerts" ? <PanelBoundary name="Alerts"><AlertsFeed alerts={alerts.alerts} meta={alerts.meta} loading={alerts.loading} error={alerts.error} filter={filter} /></PanelBoundary> :
        kind === "og" ? <PanelBoundary name="Established / OG"><OgRows tokens={og.tokens} meta={og.meta} loading={og.loading} error={og.error} filter={filter} /></PanelBoundary> :
        <PanelBoundary name="Evidence"><EvidenceRows kind={kind} /></PanelBoundary>}
     </>
@@ -590,23 +594,62 @@ function HistoricalRows({ tokens, hero, meta, loading, error, filter }: { tokens
   );
 }
 
-function Alerts() {
+const alertDot = (t: string): string =>
+  t === "distribution" || t === "rotation" ? "red"
+    : t === "proven_entry" || t === "momentum" || t === "migration" ? "green"
+      : "purple";
+
+const alertChange = (v: number | null): string =>
+  v == null ? "—" : v >= 0 ? `+${v.toFixed(0)}%` : `${v.toFixed(0)}%`;
+
+function AlertsFeed({ alerts, meta, loading, error, filter }: { alerts: AlertItem[]; meta: AlertsMeta | null; loading: boolean; error: string | null; filter: string }) {
+  if (loading) {
+    return <div className="alertList"><div className="launchEmpty"><span>Loading recent alerts...</span></div></div>;
+  }
+
+  if (error) {
+    return <div className="alertList"><div className="launchEmpty"><span>{error}</span></div></div>;
+  }
+
+  if (alerts.length === 0) {
+    return <div className="alertList"><div className="launchEmpty"><span>No alerts match the current market. Check back after the next build.</span></div></div>;
+  }
+
+  const shown = alerts.filter(a =>
+    filter === "All" ? true : filter === "High signal" ? a.signal : filter === "New" ? a.isNew : filter === "Changed" ? a.isChanged : true
+  );
+
+  if (shown.length === 0) {
+    return <div className="alertList"><div className="launchEmpty"><span>No alerts match this filter</span></div></div>;
+  }
+
   return (
     <div className="alertList">
-      {["Profitable wallet entered", "Creator-linked distribution", "Formation changed", "Migration completed", "Cluster activity detected", "Historical match found"].map((x, i) => (
-        <article key={x}>
-          <Link href="/live/bark">
-            <i className={i === 1 ? "red" : i < 4 ? "green" : "purple"} />
-            <div>
-              <b>{x}</b>
-              <p>{i === 0 ? "7xK...32a bought 1.82 SOL of BARK at $31.8K MC." : i === 1 ? "Creator-linked cohort reduced supply by 3.2%." : "New material evidence was detected for an active watchlist token."}</p>
-            </div>
-            <span>{i + 1}m ago</span>
-            <ChevronRight />
-          </Link>
-          <Link className="alertAskAction" href={`/ask-aladdin?source=alert&alertId=alert-${i + 1}&token=bark&label=${encodeURIComponent("$BARK")}&alertType=${encodeURIComponent(x)}&time=${encodeURIComponent(`${i + 1}m ago`)}`}>Open in Ask Aladdin</Link>
-        </article>
-      ))}
+      {meta ? <MetaLine label="alerts live" count={meta.count} sub={`${meta.signalCount} high signal`} fetchedAt={meta.fetchedAt} stale={meta.stale} staleAfterMs={60_000} /> : null}
+      {shown.map(a => {
+        const age = timeAgo(a.time);
+        return (
+          <article key={a.id}>
+            <Link href={`/live/${a.mint}`}>
+              <i className={alertDot(a.type)} />
+              <div>
+                <b>${a.symbol} · {a.key}</b>
+                {a.isNew || a.isChanged ? (
+                  <em className="alertChips">{a.isNew ? "NEW" : ""}{a.isChanged ? "CHANGED" : ""}</em>
+                ) : null}
+                <p>{a.detail}</p>
+                <p className="alertContext">
+                  {money(a.mc)} · {alertChange(a.change24h)} 24h
+                  {a.usd ? ` · $${compact(a.usd)} moved` : ""}
+                </p>
+              </div>
+              <span>{age}</span>
+              <ChevronRight />
+            </Link>
+            <Link className="alertAskAction" href={`/ask-aladdin?source=alert&alertId=${encodeURIComponent(a.id)}&token=${a.mint}&label=${encodeURIComponent(`$${a.symbol}`)}&alertType=${encodeURIComponent(a.key)}&time=${encodeURIComponent(age)}`}>Open in Ask Aladdin</Link>
+          </article>
+        );
+      })}
     </div>
   );
 }
