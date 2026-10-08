@@ -8,10 +8,13 @@ import "./components/ask-aladdin/ask-workspace.css";
 import "./components/launches/launches.css";
 import "./wallet-connect.css";
 import "./mobile-ux.css";
+import "./watchlist.css";
 import { AppShell } from "@/app/components/layout/AppShell";
 import { ThemeProvider } from "@/app/components/theme/ThemeProvider";
 import { AuthProvider } from "@/app/contexts/AuthContext";
+import { WatchlistProvider } from "@/app/contexts/WatchlistContext";
 import { SolanaProvider } from "@/app/providers/SolanaProvider";
+import { ToastHost } from "@/app/components/ui/ToastHost";
 export const metadata = {
   title: "Aladdin Intelligence",
   description: "Behaviour-first trading intelligence terminal",
@@ -41,9 +44,12 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <AuthProvider>
-            <SolanaProvider>
-              <AppShell>{children}</AppShell>
-            </SolanaProvider>
+            <WatchlistProvider>
+              <SolanaProvider>
+                <AppShell>{children}</AppShell>
+                <ToastHost />
+              </SolanaProvider>
+            </WatchlistProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

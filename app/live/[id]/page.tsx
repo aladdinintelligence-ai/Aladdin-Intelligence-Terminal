@@ -8,6 +8,7 @@ import {Skeleton} from "@/app/components/ui/Skeleton";
 import {IfaNow} from "@/app/components/ifa/IfaNow";
 import {TerminalInvestigation} from "@/app/components/token/TerminalInvestigation";
 import {Badge} from "@/app/components/ui/Badge";
+import {WatchlistStar} from "@/app/components/token/WatchlistStar";
 import {money,pct} from "@/app/utils/format";
 import "@/app/components/ui/skeleton.css";
 
@@ -171,6 +172,18 @@ export default function Live({params, searchParams}: {
           </div>
         </div>
         <div style={{display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap"}}>
+          <WatchlistStar
+            token={{
+              mint,
+              symbol: token.symbol,
+              name: token.name,
+              imageUrl: token.imageUrl,
+              priceUsd: token.priceUsd,
+              marketCapUsd: token.marketCapUsd,
+              priceChange24h: token.priceChange24h,
+              volume24h: token.volume24h,
+            }}
+          />
           {token.dexId && <Badge>{token.dexId.toUpperCase()}</Badge>}
           {token.url && (
             <a href={token.url} target="_blank" rel="noreferrer" className="badge" style={{textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4}}>
@@ -192,7 +205,7 @@ export default function Live({params, searchParams}: {
       <div className="terminalGrid">
         {/* <LiveTokenChart candles={candles} loading={chartLoading} error={chartError} tf={chartTf} onTfChange={setChartTf} /> */}
         <DexScreenerChart pairAddress={mint} chain={"solana"} />
-        <IfaNow />
+        {/* <IfaNow /> */}
       </div>
       <TerminalInvestigation mint={mint} symbol={token.symbol} initialView={view} />
     </>

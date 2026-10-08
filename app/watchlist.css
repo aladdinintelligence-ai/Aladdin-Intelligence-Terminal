@@ -1,0 +1,167 @@
+/* Shared watchlist styles: toast popup, star toggle, and the /watchlist page.
+   Loaded once from the root layout so the toast works on every route. */
+
+/* --- toast popup --- */
+.toastHost {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 95;
+  display: grid;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  max-width: 320px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 10px 40px rgb(0 0 0 / 40%);
+  animation: watchToastIn 0.18s ease-out;
+}
+.toast.success {
+  border-color: color-mix(in srgb, var(--positive) 55%, var(--border));
+}
+.toast.error {
+  border-color: color-mix(in srgb, var(--negative) 55%, var(--border));
+}
+@keyframes watchToastIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --- star toggle --- */
+.watchStar {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: transform 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.watchStar:hover {
+  transform: scale(1.07);
+  color: var(--brand-purple);
+  border-color: color-mix(in srgb, var(--brand-purple) 55%, var(--border));
+}
+.watchStar.watched {
+  color: #f5b942;
+  border-color: color-mix(in srgb, #f5b942 55%, var(--border));
+  background: color-mix(in srgb, #f5b942 12%, transparent);
+}
+.watchStar:disabled {
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
+
+/* --- /watchlist page --- */
+.watchCount {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.watchlistGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
+  gap: 14px;
+}
+.watchCard {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.watchCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.watchCardId {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+.watchCardId .coin {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  object-fit: cover;
+}
+.watchCardId b {
+  display: block;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.watchCardId small {
+  display: block;
+  max-width: 165px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.watchCardStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.watchCardStats small {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.watchCardStats b {
+  font-size: 14px;
+  font-weight: 700;
+}
+.watchCardStats .up { color: var(--positive); }
+.watchCardStats .down { color: var(--negative); }
+.watchCardFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.watchCardFoot a {
+  color: var(--brand-purple);
+  text-decoration: none;
+  font-weight: 600;
+}
+.watchStale {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+@media (max-width: 640px) {
+  .watchCardId small { max-width: 120px; }
+}

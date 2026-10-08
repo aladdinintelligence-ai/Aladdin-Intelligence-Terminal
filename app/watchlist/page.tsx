@@ -1,1 +1,6 @@
-import {FeaturePage} from "@/app/components/intelligence/FeaturePage";export default function Page(){return <FeaturePage kind="watchlist"/>}
+"use client";
+import { WatchlistExperience } from "@/app/components/watchlist/WatchlistExperience";
+
+export default function Page() {
+  return <WatchlistExperience />;
+}
