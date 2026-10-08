@@ -572,11 +572,13 @@ export async function fetchTokenDetails(mint, { feed = 'tokenDetail', priority =
 }
 
 // bitquery
-// Fetch OHLC candle data for a token
+// Fetch OHLC candle data for a token. dataset: realtime — our plan only
+// allows realtime; `combined` spans realtime+archive and 403s (this was the
+// "realtime-dataset fix" that kept the chart feed disabled).
 export async function fetchTokenOHLC(mint, { intervalMinutes = 5, limit = 100, feed = 'chart', priority = 'user' } = {}) {
   const SOL_MINT = 'So11111111111111111111111111111111111111112';
   const query = `{
-    Solana(dataset: combined) {
+    Solana(dataset: realtime) {
       DEXTradeByTokens(
         orderBy: { descendingByField: "Block_Timefield" }
         limit: { count: ${limit} }
