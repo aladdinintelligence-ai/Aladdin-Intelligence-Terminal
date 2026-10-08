@@ -171,7 +171,7 @@ export default function Live({params, searchParams}: {
             <b>{token.priceUsd != null ? `$${token.priceUsd < 0.000001 ? token.priceUsd.toFixed(10) : token.priceUsd < 0.01 ? token.priceUsd.toFixed(8) : token.priceUsd.toFixed(6)}` : "—"}</b>
           </div>
         </div>
-        <div style={{display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap"}}>
+        <div className="tokenHeroActions" style={{display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap"}}>
           <WatchlistStar
             token={{
               mint,

@@ -1524,8 +1524,53 @@ main {
   .historyLayout {
     grid-template-columns: 1fr;
   }
+  /* Mobile keeps every market metric: switch the horizontal strip to a
+     full-width wrapped grid instead of hiding it. */
   .heroMetrics {
-    display: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+    gap: 12px 16px;
+    width: 100%;
+    margin-left: 0;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    grid-column: 1/-1;
+  }
+  .heroMetrics > div {
+    min-width: 0;
+    padding: 0;
+    border-left: 0;
+  }
+  .tokenHero {
+    row-gap: 10px;
+  }
+  .tokenHeroActions {
+    grid-column: 1/-1;
+    justify-content: flex-start;
+  }
+  .tokenHeroActions .badge,
+  .tokenHeroActions > a,
+  .tokenHeroActions > button {
+    font-size: 9px;
+    padding: 4px 8px;
+  }
+  .tokenName {
+    min-width: 0;
+  }
+  .tokenName h1 {
+    font-size: 20px;
+  }
+  .tokenName p {
+    font-size: 10px;
+  }
+  .heroMetrics small {
+    font-size: 9px;
+  }
+  .heroMetrics b {
+    font-size: 15px;
+  }
+  .heroMetrics em {
+    font-size: 10px;
   }
   .terminalGrid {
     display: block;
