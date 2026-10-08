@@ -202,7 +202,7 @@ export default function Live({params, searchParams}: {
           ))}
         </div>
       </div>
-      <div className="terminalGrid">
+      <div className="">
         {/* <LiveTokenChart candles={candles} loading={chartLoading} error={chartError} tf={chartTf} onTfChange={setChartTf} /> */}
         <DexScreenerChart pairAddress={mint} chain={"solana"} />
         {/* <IfaNow /> */}
