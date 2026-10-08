@@ -42,21 +42,36 @@ export function useTokenInfo(mint: string | null, pollInterval = 15000) {
     setError(null);
     setToken(null);
 
+    let attempts = 0;
+
     const fetchToken = async (isPoll = false) => {
       try {
         const res = await fetch(`${API_URL}/api/token-info/${mintRef.current}`);
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || `Request failed with status ${res.status}`);
+          throw new Error(body.message || body.error || `Request failed with status ${res.status}`);
         }
         const data = await res.json();
-        if (!cancelled) { setToken(data); setError(null); }
-      } catch (err) {
-        if (!cancelled && !isPoll) {
-          setError(err instanceof Error ? err.message : 'Failed to load token');
+        if (!cancelled) {
+          attempts = 0;
+          setToken(data);
+          setError(null);
+          if (!isPoll) setLoading(false);
         }
-      } finally {
-        if (!cancelled && !isPoll) setLoading(false);
+      } catch (err) {
+        if (cancelled || isPoll) return;
+        attempts += 1;
+        if (attempts < 4) {
+          // Transient upstream blips must not flash the full error page:
+          // retry quickly a few times before surfacing the error (the 15s
+          // poll keeps retrying silently afterwards either way).
+          setTimeout(() => {
+            if (!cancelled) fetchToken(false);
+          }, 2500);
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Failed to load token');
+        if (!isPoll) setLoading(false);
       }
     };
 
