@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { tokensController, internalController, healthController, launchesController, moversController, ogController, smartMoneyController, formationController, insiderController, clusterController, historicalController, watchlistController } from '../controllers/index.js';
+import { tokensController, internalController, healthController, launchesController, moversController, ogController, smartMoneyController, formationController, insiderController, clusterController, historicalController, watchlistController, alertsController } from '../controllers/index.js';
 import { requireAuth, requireAdmin, optionalAuth } from '../middleware/auth.js';
 import swapRouter from './swap.js';
 import askRouter from './ask.js';
@@ -29,6 +29,7 @@ router.get('/api/formation', formationController.getFormationController);
 router.get('/api/insiders', insiderController.getInsiderController);
 router.get('/api/clusters', clusterController.getClusterController);
 router.get('/api/historical', historicalController.getHistoricalController);
+router.get('/api/alerts', alertsController.getAlertsController);
 router.get('/api/price/sol', getPriceController);
 
 // Watchlist: per-user saved tokens (auth = cookie/Bearer, same as ask).
