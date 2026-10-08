@@ -330,16 +330,23 @@ export async function bitquery(query, label = '', { feed = 'data', priority = 'u
   }
 }
 
+// Assign each DexScreener pair to the requested mint it actually belongs to:
+// each mint gets ONLY pairs whose base token is that mint. The previous
+// filter kept every pair from the batch (any requested mint) under each key,
+// so callers taking pairs[0] showed one token's data for the whole list.
+export function groupPairsByMint(mints, pairs) {
+  const list = Array.isArray(pairs) ? pairs : [];
+  const map = {};
+  for (const mint of mints) {
+    map[mint] = list.filter((p) => p && p.pairAddress && p.baseToken && p.baseToken.address === mint);
+  }
+  return map;
+}
+
 async function requestDexChunk(mints, { timeoutMs } = {}) {
   const url = `https://api.dexscreener.com/latest/dex/tokens/${mints.join(',')}`;
   const res = await axios.get(url, { timeout: timeoutMs || config.requestTimeoutMs });
-  const map = {};
-  for (const mint of mints) {
-    const pairs = res.data && res.data.pairs ? res.data.pairs.filter((p) => p.pairAddress) : [];
-    const tokenPairs = pairs.filter((p) => p.baseToken && mints.includes(p.baseToken.address));
-    map[mint] = tokenPairs.length ? tokenPairs : [];
-  }
-  return map;
+  return groupPairsByMint(mints, res.data && res.data.pairs);
 }
 
 function isClientStatus(status) {
