@@ -230,7 +230,92 @@ function buildMeta(count, coverage) {
   };
 }
 
-async function buildClustersResponse(limit) {
+// Per-token capped candidate lists (top by activity), then pair refinement:
+// pairs are wallets co-listed on the same token's capped set, scored by the
+// exact intersection of their token sets and timed co-movements.
+function computeCandidatePairs(multiToken, byWallet) {
+  const tokenCandidates = new Map();
+  for (const { wallet, tokens } of multiToken) {
+    for (const mint of tokens.keys()) {
+      if (!tokenCandidates.has(mint)) tokenCandidates.set(mint, []);
+      const list = tokenCandidates.get(mint);
+      list.push(wallet);
+    }
+  }
+  for (const list of tokenCandidates.values()) {
+    list.sort(function (a, b) {
+      const aAct = byWallet.get(a).activity;
+      const bAct = byWallet.get(b).activity;
+      return bAct - aAct;
+    });
+    list.length = Math.min(list.length, MAX_TOKEN_CAPS);
+  }
+
+  const pairInfo = new Map();
+  for (const [mint, list] of tokenCandidates) {
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i];
+        const b = list[j];
+        const key = a < b ? a + '|' + b : b + '|' + a;
+        if (!pairInfo.has(key)) {
+          pairInfo.set(key, { wallets: [a, b], shared: 0, coCount: 0 });
+        }
+        pairInfo.get(key).shared++;
+      }
+    }
+  }
+
+  const coWindow = CO_WINDOW_MINUTES * 60 * 1000;
+  for (const pair of pairInfo.values()) {
+    const a = byWallet.get(pair.wallets[0]);
+    const b = byWallet.get(pair.wallets[1]);
+    let shared = 0;
+    let coCount = 0;
+    for (const [mint, legA] of a.tokens) {
+      const legB = b.tokens.get(mint);
+      if (!legB) continue;
+      shared++;
+      if (Math.abs(legA.minTime - legB.minTime) <= coWindow) coCount++;
+    }
+    pair.shared = shared;
+    pair.coCount = coCount;
+  }
+  return pairInfo;
+}
+
+// Union-find groups for pairs with at least minCo timed co-movements.
+function linkGroups(pairInfo, minCo) {
+  const uf = new UnionFind();
+  const pairs = [];
+  for (const pair of pairInfo.values()) {
+    if (pair.coCount >= minCo) {
+      uf.union(pair.wallets[0], pair.wallets[1]);
+      pairs.push(pair);
+    }
+  }
+  const sizes = [...uf.groups().values()].map(function (g) { return g.length; });
+  return { uf, pairs, sizes };
+}
+
+// Escalate link strength until the graph resolves into real 3-40 wallet
+// groups. At the loosest level the elite sniper/bot wallets that dominate
+// every hot token all merge into one giant component (> MAX_CLUSTER_MEMBERS),
+// which the artifact rule drops - leaving the page empty. Stronger levels
+// keep only repeatedly co-moving subgroups, which is the signal we want.
+function ladderLinkGroups(pairInfo) {
+  const levels = [...new Set([MIN_COOCCURRENCE, 3, 4, 5, 6, 8, 10, 12, 16, 20])];
+  let baseline = null;
+  for (const minCo of levels) {
+    const result = linkGroups(pairInfo, minCo);
+    if (!baseline) baseline = { ...result, level: minCo };
+    const hasReal = result.sizes.some(function (s) { return s >= MIN_CLUSTER_MEMBERS && s <= MAX_CLUSTER_MEMBERS; });
+    if (hasReal) return { ...result, level: minCo, tried: levels.slice(0, levels.indexOf(minCo) + 1) };
+  }
+  return { ...baseline, tried: levels };
+}
+
+export async function buildClustersResponse(limit) {
   const leaders = await fetchVolumeLeaders();
   if (leaders.length === 0) {
     return { data: [], meta: buildMeta(0, 'No candidate tokens were available for cluster screening.') };
@@ -257,79 +342,33 @@ async function buildClustersResponse(limit) {
   }
   const byWallet = new Map(multiToken.map(function (m) { return [m.wallet, m]; }));
 
-  // Per-token capped candidate lists (top by activity), bounded for pairing.
-  const tokenCandidates = new Map();
-  for (const { wallet, tokens } of multiToken) {
-    for (const mint of tokens.keys()) {
-      if (!tokenCandidates.has(mint)) tokenCandidates.set(mint, []);
-      const list = tokenCandidates.get(mint);
-      list.push(wallet);
-    }
-  }
-  for (const list of tokenCandidates.values()) {
-    list.sort(function (a, b) {
-      const aAct = byWallet.get(a).activity;
-      const bAct = byWallet.get(b).activity;
-      return bAct - aAct;
-    });
-    list.length = Math.min(list.length, MAX_TOKEN_CAPS);
-  }
-
-  // Candidate pairs: wallets co-listed on the same token's capped set.
-  const pairInfo = new Map();
-  for (const [mint, list] of tokenCandidates) {
-    for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        const a = list[i];
-        const b = list[j];
-        const key = a < b ? a + '|' + b : b + '|' + a;
-        if (!pairInfo.has(key)) {
-          pairInfo.set(key, { wallets: [a, b], shared: 0, coCount: 0 });
-        }
-        pairInfo.get(key).shared++;
-      }
-    }
-  }
-
-  // Refine pairs: exact intersection + near-simultaneous co-movement.
-  const coWindow = CO_WINDOW_MINUTES * 60 * 1000;
-  for (const [key, pair] of pairInfo) {
-    const a = byWallet.get(pair.wallets[0]);
-    const b = byWallet.get(pair.wallets[1]);
-    let shared = 0;
-    let coCount = 0;
-    for (const [mint, legA] of a.tokens) {
-      const legB = b.tokens.get(mint);
-      if (!legB) continue;
-      shared++;
-      if (Math.abs(legA.minTime - legB.minTime) <= coWindow) coCount++;
-    }
-    pair.shared = shared;
-    pair.coCount = coCount;
-  }
-
-  // Union-find: repeated (≥2) timed co-movements link wallets into clusters.
-  const uf = new UnionFind();
-  const qualifyingPairs = [];
-  for (const pair of pairInfo.values()) {
-    if (pair.coCount >= MIN_COOCCURRENCE) {
-      uf.union(pair.wallets[0], pair.wallets[1]);
-      qualifyingPairs.push(pair);
-    }
-  }
+  const pairInfo = computeCandidatePairs(multiToken, byWallet);
+  // Union-find: repeated timed co-movements link wallets into clusters,
+  // escalating link strength until distinct 3-40 wallet groups resolve.
+  const link = ladderLinkGroups(pairInfo);
+  const uf = link.uf;
+  const qualifyingPairs = link.pairs;
 
   const clusters = [];
   let serial = 0;
+  let tooSmall = 0;
+  let tooLarge = 0;
+  const groupSizes = [];
+  const coHist = {};
+  for (const p of qualifyingPairs) coHist[p.coCount] = (coHist[p.coCount] || 0) + 1;
+  const qualifyingWallets = new Set();
+  for (const p of qualifyingPairs) { qualifyingWallets.add(p.wallets[0]); qualifyingWallets.add(p.wallets[1]); }
   for (const members of uf.groups().values()) {
-    if (members.length < MIN_CLUSTER_MEMBERS) continue;
+    groupSizes.push(members.length);
+    if (members.length < MIN_CLUSTER_MEMBERS) { tooSmall++; continue; }
     // Components this large are connectivity artifacts of hot tokens and
     // bot/aggregator congestion, not wallet coordination - drop them.
-    if (members.length > MAX_CLUSTER_MEMBERS) continue;
+    if (members.length > MAX_CLUSTER_MEMBERS) { tooLarge++; continue; }
     serial++;
     const membersSet = new Set(members);
     let clusterCoMoves = 0;
     for (const pair of qualifyingPairs) {
-      if (pair.coCount >= MIN_COOCCURRENCE && membersSet.has(pair.wallets[0]) && membersSet.has(pair.wallets[1])) {
+      if (membersSet.has(pair.wallets[0]) && membersSet.has(pair.wallets[1])) {
         clusterCoMoves += pair.coCount;
       }
     }
@@ -422,11 +461,27 @@ async function buildClustersResponse(limit) {
   });
   const selected = clusters.slice(0, limit);
 
-  const coverage = 'Wallet clusters are detected from the last ' + RECENT_WINDOW_HOURS + 'h of DEX trades (Bitquery samples up to three '
+  // One line per scan so an empty page is diagnosable from logs: which
+  // stage filtered everything out (leaders, pairs, co-movement, group size).
+  console.log('[cluster] scan: leaders=' + leaders.length + ' rows=' + rows.length
+    + ' wallets=' + walletTokens.size + ' multiToken=' + multiToken.length
+    + ' pairs=' + pairInfo.size + ' level=' + link.level + ' tried=' + JSON.stringify(link.tried)
+    + ' qualifying=' + qualifyingPairs.length
+    + ' qWallets=' + qualifyingWallets.size + ' coHist=' + JSON.stringify(coHist)
+    + ' groups=' + uf.groups().size + ' sizes=' + JSON.stringify(groupSizes.sort((a, b) => b - a))
+    + ' tooSmall=' + tooSmall + ' tooLarge=' + tooLarge
+    + ' clusters=' + clusters.length + ' selected=' + selected.length);
+
+  let coverage = 'Wallet clusters are detected from the last ' + RECENT_WINDOW_HOURS + 'h of DEX trades (Bitquery samples up to three '
     + 'recent legs per wallet). Wallets trading the same token within a ' + CO_WINDOW_MINUTES + '-minute window on at least two different '
     + 'tokens are linked; connected groups of ' + MIN_CLUSTER_MEMBERS + '-' + MAX_CLUSTER_MEMBERS + ' wallets form a cluster (larger '
-    + 'connected groups are congestion artifacts and are dropped). Flow and sell pressure are measured across '
+    + 'connected groups are congestion artifacts and are dropped). When the loosest link strength merges unrelated wallets into one '
+    + 'giant group, only stronger repeated co-movements are kept. Flow and sell pressure are measured across '
     + 'all sampled legs of cluster members. Shared timing is an observed relationship, not proof of common ownership or coordination intent.';
+  if (selected.length === 0) {
+    coverage = 'No distinct wallet groups of ' + MIN_CLUSTER_MEMBERS + '-' + MAX_CLUSTER_MEMBERS + ' wallets resolved at any link strength '
+      + 'in the last ' + RECENT_WINDOW_HOURS + 'h of activity. ' + coverage;
+  }
 
   return { data: selected, meta: buildMeta(selected.length, coverage) };
 }
