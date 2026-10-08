@@ -18,6 +18,7 @@ export { WalletRecentBehaviourState } from './walletRecentBehaviourState.model.j
 export { CohortDefinition } from './cohortDefinition.model.js';
 export { CohortMembership } from './cohortMembership.model.js';
 export { ProviderRawSnapshot } from './providerRawSnapshot.model.js';
+export { SolPrice } from './solPrice.model.js';
 export { User } from './user.model.js';
 export { AskConversation } from './askConversation.model.js';
 export { AskAnalysisRun } from './askAnalysisRun.model.js';
