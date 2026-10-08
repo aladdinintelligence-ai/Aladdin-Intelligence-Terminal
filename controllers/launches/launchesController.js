@@ -30,7 +30,7 @@ function generateColor(mint) {
 
 function ageMinutes(isoString) {
   if (!isoString) return null;
-  return Math.round((Date.now() - new Date(isoString).getTime()) / 60000);
+  return (Date.now() - new Date(isoString).getTime()) / 60000;
 }
 
 async function enrichWithImageUrls(tokens) {

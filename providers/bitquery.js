@@ -324,6 +324,14 @@ export async function fetchNewTokens(limit = 50, { feed = 'launches', priority =
     for (const [mint, pool] of fallbackPools) poolByMint.set(mint, pool);
   }
 
+  // New pumps are minutes old: a 1h window captures their whole trading
+  // history and stays honest with the card's "1H" volume label once a token
+  // ages past 60 minutes.
+  const volumeByMint = await fetchVolumeForMints(
+    supply.map(u => u.TokenSupplyUpdate?.Currency?.MintAddress).filter(Boolean),
+    1, 'fetchNewTokens:volume', feed,
+  );
+
   const tokens = supply.map(update => {
     const c = update.TokenSupplyUpdate?.Currency;
     const mint = c?.MintAddress || '';
@@ -335,6 +343,7 @@ export async function fetchNewTokens(limit = 50, { feed = 'launches', priority =
       createdAt: update.Block?.Time || new Date().toISOString(),
       marketCapUsd: pool ? parseFloat(pool.Pool?.Base?.PostAmountInUSD) || 0 : parseFloat(update.TokenSupplyUpdate?.PostBalanceInUSD) || 0,
       liquidityUsd: pool ? parseFloat(pool.Pool?.Quote?.PostAmountInUSD) || 0 : 0,
+      volume: volumeByMint.get(mint) || 0,
       bondingProgress: pool ? calcBonding(pool.Pool?.Base?.PostAmount) : null,
       marketAddress: pool?.Pool?.Market?.MarketAddress || '',
     };
@@ -433,9 +442,10 @@ export async function fetchMigratedTokens(limit = 50, { feed = 'launches', prior
   const pools = dedup(data?.Solana?.DEXPools || [], x => x.Pool?.Market?.BaseCurrency?.MintAddress);
   const mints = pools.map(p => p.Pool?.Market?.BaseCurrency?.MintAddress).filter(Boolean);
 
-  const [holdersByMint, txByMint] = await Promise.all([
+  const [holdersByMint, txByMint, volumeByMint] = await Promise.all([
     fetchHoldersCountForMints(mints, 'fetchMigratedTokens:holders', feed),
     fetchTxCountForMints(mints, 'fetchMigratedTokens:txCount', feed),
+    fetchVolumeForMints(mints, 1, 'fetchMigratedTokens:volume', feed),
   ]);
 
   const tokens = pools.map(pool => {
@@ -449,6 +459,7 @@ export async function fetchMigratedTokens(limit = 50, { feed = 'launches', prior
       migratedAt: pool.Block?.Time || new Date().toISOString(),
       marketCapUsd: parseFloat(pool.Pool?.Base?.PostAmountInUSD) || 0,
       liquidityUsd: parseFloat(pool.Pool?.Quote?.PostAmountInUSD) || 0,
+      volume: volumeByMint.get(mint) || 0,
       quoteBalance: pool.Pool?.Quote?.PostAmount || '0',
       quotePriceUsd: parseFloat(pool.Pool?.Quote?.PriceInUSD) || 0,
       holders: holdersByMint.get(mint) || 0,
