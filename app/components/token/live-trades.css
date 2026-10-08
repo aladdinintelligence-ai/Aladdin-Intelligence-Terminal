@@ -96,8 +96,8 @@
   scrollbar-width: thin;
 }
 .tlGrid {
-  --cols: 7;
-  min-width: 800px;
+  --cols: 8;
+  min-width: 920px;
 }
 
 .tlHead,
@@ -189,6 +189,69 @@
 }
 .tlPrice {
   color: var(--tl-dim);
+}
+
+/* Behaviour: Aladdin's per-wallet trade signature as a compact chip, keyed by
+   data-kind so a label's colour is stable across every row of the same wallet. */
+.tlBehav {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 4px;
+  font: 700 9px/1 Inter, Arial, sans-serif;
+  letter-spacing: .3px;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+.tlBehav[data-kind="buy"] {
+  color: #22c55e;
+  background: rgba(34, 197, 94, .12);
+}
+.tlBehav[data-kind="sell"] {
+  color: #ef4444;
+  background: rgba(239, 68, 68, .12);
+}
+.tlBehav[data-kind="mixed"] {
+  color: #c3b3f7;
+  background: rgba(167, 139, 250, .13);
+}
+.tlBehav[data-kind="creator"] {
+  color: #63b1ff;
+  background: rgba(71, 168, 255, .15);
+}
+.tlBehav[data-kind="cluster"] {
+  color: #4fd9e6;
+  background: rgba(54, 217, 232, .15);
+}
+.tlBehav[data-kind="scalper"] {
+  color: #ff7688;
+  background: rgba(255, 83, 100, .15);
+}
+.tlBehav[data-kind="migration"] {
+  color: #f9c869;
+  background: rgba(246, 185, 74, .15);
+}
+.tlBehav[data-kind="fresh"] {
+  color: #4bdbb0;
+  background: rgba(51, 214, 166, .15);
+}
+.tlBehav[data-kind="bundle"] {
+  color: #b990ff;
+  background: rgba(155, 104, 255, .15);
+}
+.tlBehav[data-kind="smart"] {
+  color: #cb99ff;
+  background: rgba(185, 133, 255, .15);
+}
+.tlBehav[data-kind="insider"] {
+  color: #ff9c68;
+  background: rgba(255, 130, 77, .15);
+}
+.tlBehav[data-kind="unknown"] {
+  color: #9aa2ad;
+  background: rgba(127, 135, 150, .12);
 }
 
 /* Trader: deterministic hue from the address, so a wallet keeps its colour. */

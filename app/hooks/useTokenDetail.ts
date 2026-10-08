@@ -11,6 +11,9 @@ export interface Trade {
   signature: string;
   /** Trader address. The backend already returns this for the trades tab. */
   wallet: string;
+  /** Aladdin's per-wallet behaviour for this token snapshot (Creator, Scalper,
+   * Cluster Wallet, Fresh Wallet, ...) or a direction (Buyer/Seller/Mixed). */
+  behaviour?: string;
 }
 
 export interface Participant {

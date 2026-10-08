@@ -63,6 +63,18 @@ function shortAddr(addr:string):string{
   return addr.length<=10?addr:`${addr.slice(0,4)}…${addr.slice(-4)}`;
 }
 
+// Maps a backend behaviour label onto a stable chip variant so the palette is
+// shared across wallets instead of drifting with each label string.
+function behavKind(b:string):string{
+  const map:Record<string,string>={
+    "Creator":"creator","Cluster Wallet":"cluster","Bundle Specialist":"bundle",
+    "Scalper":"scalper","Migration Specialist":"migration","Fresh Wallet":"fresh",
+    "Smart Money":"smart","Insider":"insider","Unknown":"unknown",
+    "Buyer":"buy","Seller":"sell","Mixed":"mixed",
+  };
+  return map[b]||"unknown";
+}
+
 // Stable per-wallet avatar hue so a trader's colour never changes between rows.
 function hueOf(addr:string):number{
   let h=0;
@@ -152,12 +164,13 @@ export function LiveTradesLog({mint,symbol}:{mint:string;symbol?:string}){
       : rows.length===0
         ? <div className="tlEmpty"><b>No {side==="all"?"":side==="buy"?"buy":"sell"} transactions yet</b><span>New fills appear here automatically.</span></div>
         : <div className="tlScroll">
-          <div className="tlGrid" style={{"--cols":7} as React.CSSProperties}>
+          <div className="tlGrid" style={{"--cols":8} as React.CSSProperties}>
             <div className="tlHead" role="row">
               <span>Date</span><span>Type</span>
               <span className="tlNum">USD</span>
               <span className="tlNum">{symbol||"Tokens"}</span>
               <span className="tlNum">Price</span>
+              <span>Behaviour</span>
               <span>Trader</span><span>Txn</span>
             </div>
             {rows.map(({trade:t,key})=>{
@@ -178,6 +191,11 @@ export function LiveTradesLog({mint,symbol}:{mint:string;symbol?:string}){
                 <span className="tlNum tlUsd">{usd(value)}</span>
                 <span className="tlNum tlAmt">{tokens(t.amount)}</span>
                 <span className="tlNum tlPrice">{sigPrice(t.priceUsd)}</span>
+                <span>
+                  {t.behaviour
+                    ? <i className="tlBehav" data-kind={behavKind(t.behaviour)} title={`${t.behaviour} — wallet behaviour derived from this token's trades`}>{t.behaviour}</i>
+                    : <span className="tlDim">—</span>}
+                </span>
                 <span>
                   {t.wallet
                     ? <a className="tlTrader" href={`https://solscan.io/account/${t.wallet}`} target="_blank" rel="noreferrer" title={t.wallet}>
