@@ -68,11 +68,16 @@ describe('budget tracker', () => {
 
   test('tier transitions and hard stop at 100%', () => {
     const cap = budget.dailyCap();
-    budget.state.day.byFeed['bitquery:og'] = Math.floor(cap * config.tier1);
+    // Integer counts strictly ABOVE each threshold. floor(cap * tier) can
+    // land just below the fraction (cap=8327 → floor(0.7*cap)/cap=0.6999),
+    // which made this test depend on the date: it passed when the derived
+    // cap was 8000 (exact 0.7) and failed at 8327.
+    const above = (frac) => Math.min(Math.floor(cap * frac) + 1, cap - 1);
+    budget.state.day.byFeed['bitquery:og'] = above(config.tier1);
     assert.equal(budget.tier().id, 1);
     assert.equal(budget.canFire(), true);
 
-    budget.state.day.byFeed['bitquery:og'] = Math.floor(cap * config.tier2);
+    budget.state.day.byFeed['bitquery:og'] = above(config.tier2);
     assert.equal(budget.tier().id, 2);
     assert.equal(budget.canFire(), true);
 
