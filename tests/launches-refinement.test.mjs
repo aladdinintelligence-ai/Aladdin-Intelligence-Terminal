@@ -11,6 +11,7 @@ const filters=read("app/components/launches/LaunchFilters.tsx");
 const styles=read("app/components/launches/launches.css");
 const feed=read("app/components/launches/LaunchFeedRow.tsx");
 const artwork=read("app/components/launches/SyntheticTokenImage.tsx");
+const hook=read("app/hooks/useLaunches.ts");
 
 test("fixture coverage includes at least six tokens per lifecycle",()=>{assert.ok((fixtures.match(/lifecycle:"new"/g)??[]).length>=6);assert.ok((fixtures.match(/lifecycle:"almost-bonded"/g)??[]).length>=6);assert.ok((fixtures.match(/lifecycle:"migrated"/g)??[]).length>=6)});
 test("volume windows and comparative direction are lifecycle aware",()=>{assert.match(utilities,/ageMinutes<60/);assert.match(utilities,/previousHourVolume===null/);assert.match(card,/volumeWindow\(token\)/);assert.match(card,/volumeUp/);assert.match(card,/volumeDown/)});
@@ -25,6 +26,17 @@ test("age formatting is precise: sub-minute tokens resolve to seconds, never 0m"
   assert.match(utilities,/Math\.floor\(minutes\/1440\)/);
   for(const value of [/NaN/,/0m/])assert.doesNotMatch(card,value);
   for(const value of [/migratedMinutesAgo!=null/,/ageMinutes!=null/])assert.match(card,value);
+});
+test("every tab is prefetched on load and hydrated from session, so switching never waits",()=>{
+  assert.match(hook,/LAUNCH_TABS/);
+  assert.match(hook,/for \(const t of LAUNCH_TABS\)/);
+  assert.match(hook,/useSyncExternalStore/);
+  assert.match(hook,/sessionStorage/);
+  assert.match(hook,/tabParam\(tab\)/);
+  assert.match(hook,/CACHE_TTL/);
+  assert.match(hook,/refetch/);
+  assert.match(experience,/Retry/);
+  assert.doesNotMatch(hook,/useState/);
 });
 test("cards and filter panel use responsive semantic theme surfaces",()=>{for(const value of [/var\(--surface\)/,/var\(--text-primary\)/,/var\(--brand-purple\)/,/@media\(max-width:760px\)/])assert.match(styles,value)});
 

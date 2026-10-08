@@ -33,7 +33,7 @@ export function LaunchesExperience(){
   const [showAuthGate,setShowAuthGate]=useState(false);
   const [hydrated,setHydrated]=useState(false);
 
-  const {tokens:liveTokens,loading,refreshing,error}=useLaunches(tab);
+  const {tokens:liveTokens,loading,refreshing,error,refetch}=useLaunches(tab);
 
   useEffect(()=>{try{const stored=JSON.parse(sessionStorage.getItem(STORAGE_KEY)??"null") as Partial<StoredLaunchView>|null;if(stored?.tab&&tabs.includes(stored.tab))setTab(stored.tab);if(stored?.filters)setFilters({...defaultLaunchFilters,...stored.filters});if(stored?.sort)setSort(stored.sort);requestAnimationFrame(()=>window.scrollTo({top:stored?.scrollY??0}));}catch{}setHydrated(true)},[]);
 
@@ -141,6 +141,7 @@ export function LaunchesExperience(){
       <div className="launchEmpty">
         <b>Error loading launches</b>
         <span>{error}</span>
+        <button onClick={refetch}>Retry</button>
       </div>
     ) : visible.length ? (
       <div className="launchCardGrid">
