@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { tokensController, internalController, healthController, launchesController, moversController, ogController, smartMoneyController, formationController, insiderController, clusterController, historicalController } from '../controllers/index.js';
+import { tokensController, internalController, healthController, launchesController, moversController, ogController, smartMoneyController, formationController, insiderController, clusterController, historicalController, watchlistController } from '../controllers/index.js';
 import { requireAuth, requireAdmin, optionalAuth } from '../middleware/auth.js';
 import swapRouter from './swap.js';
 import askRouter from './ask.js';
@@ -30,6 +30,11 @@ router.get('/api/insiders', insiderController.getInsiderController);
 router.get('/api/clusters', clusterController.getClusterController);
 router.get('/api/historical', historicalController.getHistoricalController);
 router.get('/api/price/sol', getPriceController);
+
+// Watchlist: per-user saved tokens (auth = cookie/Bearer, same as ask).
+router.get('/api/watchlist', requireAuth, watchlistController.getWatchlistController);
+router.post('/api/watchlist/:mint', requireAuth, watchlistController.addWatchlistController);
+router.delete('/api/watchlist/:mint', requireAuth, watchlistController.removeWatchlistController);
 
 router.post('/api/tokens/:mint/sync', requireAuth, tokensController.syncTokenController);
 router.get('/api/tokens/:mint', requireAuth, tokensController.getTokenController);

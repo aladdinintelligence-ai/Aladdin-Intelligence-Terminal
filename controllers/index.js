@@ -12,3 +12,4 @@ export * as formationController from './formation/formationController.js';
 export * as insiderController from './insider/insiderController.js';
 export * as clusterController from './cluster/clusterController.js';
 export * as historicalController from './historical/historicalController.js';
+export * as watchlistController from './watchlist/watchlistController.js';

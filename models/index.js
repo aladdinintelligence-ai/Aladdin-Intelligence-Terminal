@@ -20,5 +20,6 @@ export { CohortMembership } from './cohortMembership.model.js';
 export { ProviderRawSnapshot } from './providerRawSnapshot.model.js';
 export { SolPrice } from './solPrice.model.js';
 export { User } from './user.model.js';
+export { Watchlist } from './watchlist.model.js';
 export { AskConversation } from './askConversation.model.js';
 export { AskAnalysisRun } from './askAnalysisRun.model.js';
