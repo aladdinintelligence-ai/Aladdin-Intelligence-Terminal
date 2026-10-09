@@ -3,6 +3,7 @@ import config from '../../configs/dataLayer.js';
 import dl from '../../providers/dataLayer.js';
 import coldBuildLimiter from '../../services/coldBuildLimiter.js';
 import { annotateTradesWithBehaviour } from '../../services/tradeBehaviourService.js';
+import { annotateWallets, groupParticipants } from '../../services/participantBehaviourService.js';
 import { Token } from '../../models/index.js';
 import mongoose from 'mongoose';
 
@@ -209,26 +210,45 @@ async function fetchParticipants(mint) {
     const addr = t.Trade?.Account?.Owner;
     if (!addr) continue;
     if (!byWallet.has(addr)) {
-      byWallet.set(addr, { wallet: addr, trades: 0, buys: 0, sells: 0, totalVolumeUsd: 0, firstTrade: t.Block?.Time, lastTrade: t.Block?.Time });
+      byWallet.set(addr, { wallet: addr, trades: 0, buys: 0, sells: 0, totalVolumeUsd: 0, firstTrade: t.Block?.Time, lastTrade: t.Block?.Time, buyTimesMs: [], sellTimesMs: [] });
     }
     const w = byWallet.get(addr);
     w.trades++;
+    const ms = Date.parse(t.Block?.Time) || null;
     const side = t.Trade?.Side?.Type?.toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
-    if (side === 'BUY') w.buys++;
-    else w.sells++;
+    if (side === 'BUY') {
+      w.buys++;
+      if (ms) w.buyTimesMs.push(ms);
+    } else {
+      w.sells++;
+      if (ms) w.sellTimesMs.push(ms);
+    }
     w.totalVolumeUsd += parseFloat(t.Trade?.PriceInUSD) || 0;
     if (t.Block?.Time < w.firstTrade) w.firstTrade = t.Block?.Time;
     if (t.Block?.Time > w.lastTrade) w.lastTrade = t.Block?.Time;
   }
 
-  return [...byWallet.values()]
+  // Creator is token-specific and anchors the Creator Wallet label.
+  const creator = await findTokenCreator(mint);
+
+  const wallets = [...byWallet.values()]
     .sort((a, b) => b.totalVolumeUsd - a.totalVolumeUsd)
     .slice(0, CANONICAL_LIMIT)
     .map(w => ({
-      ...w,
+      wallet: w.wallet,
       short: `${w.wallet.slice(0, 4)}...${w.wallet.slice(-4)}`,
-      behaviour: w.buys > w.sells * 2 ? 'Buyer' : w.sells > w.buys * 2 ? 'Seller' : 'Mixed',
+      trades: w.trades,
+      buys: w.buys,
+      sells: w.sells,
+      totalVolumeUsd: w.totalVolumeUsd,
+      firstTrade: w.firstTrade,
+      lastTrade: w.lastTrade,
     }));
+
+  return {
+    groups: groupParticipants(wallets, creator),
+    wallets: annotateWallets(wallets, creator),
+  };
 }
 
 async function fetchHolders(mint) {
@@ -409,7 +429,7 @@ async function buildTab(tab, mint) {
   return {
     data,
     totals,
-    meta: { mint, tab, count: Array.isArray(data) ? data.length : 1, source: dataProvider, fetchedAt: new Date().toISOString() },
+    meta: { mint, tab, count: Array.isArray(data) ? data.length : (data && data.groups ? data.groups.length : 1), source: dataProvider, fetchedAt: new Date().toISOString() },
   };
 }
 
