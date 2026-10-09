@@ -88,7 +88,7 @@ function tradeKey(t:Trade,index:number):string{
 }
 
 export function LiveTradesLog({mint,symbol}:{mint:string;symbol?:string}){
-  const{data,loading}=useTokenDetail(mint,"trades",50,REFRESH_MS);
+  const{data,totals,loading}=useTokenDetail(mint,"trades",50,REFRESH_MS);
   const trades=(data as Trade[]|null)??null;
   const[side,setSide]=useState<SideFilter>("all");
 
@@ -144,6 +144,12 @@ export function LiveTradesLog({mint,symbol}:{mint:string;symbol?:string}){
   const now=Date.now();
   const stale=loading||!trades;
 
+  // Loudest two numbers above the tape are the token's LIFETIME buy/sell
+  // volume (all-time aggregates from the API), not the 50 visible rows. The
+  // recent-window sum only fills the gap while the lifetime totals are loading.
+  const buyTotal = totals?.buysAll ?? summary.buys;
+  const sellTotal = totals?.sellsAll ?? summary.sells;
+
   return <div className="tl">
     <div className="tlBar">
       <div className="tlSeg" role="group" aria-label="Filter by side">
@@ -155,8 +161,8 @@ export function LiveTradesLog({mint,symbol}:{mint:string;symbol?:string}){
         <i className="tlLiveDot"/>{stale?"connecting":"live"}
       </span>
       <span className="tlSpacer"/>
-      <span className="tlStat">Buys <b style={{color:"var(--tl-buy)"}}>{usd(summary.buys)}</b></span>
-      <span className="tlStat">Sells <b style={{color:"var(--tl-sell)"}}>{usd(summary.sells)}</b></span>
+      <span className="tlStat" title="Total buy volume since creation">Buys <b style={{color:"var(--tl-buy)"}}>{usd(buyTotal)}</b></span>
+      <span className="tlStat" title="Total sell volume since creation">Sells <b style={{color:"var(--tl-sell)"}}>{usd(sellTotal)}</b></span>
     </div>
 
     {!trades
@@ -167,10 +173,10 @@ export function LiveTradesLog({mint,symbol}:{mint:string;symbol?:string}){
           <div className="tlGrid" style={{"--cols":8} as React.CSSProperties}>
             <div className="tlHead" role="row">
               <span>Date</span><span>Type</span>
+              <span>Behaviour</span>
               <span className="tlNum">USD</span>
               <span className="tlNum">{symbol||"Tokens"}</span>
               <span className="tlNum">Price</span>
-              <span>Behaviour</span>
               <span>Trader</span><span>Txn</span>
             </div>
             {rows.map(({trade:t,key})=>{
@@ -188,14 +194,14 @@ export function LiveTradesLog({mint,symbol}:{mint:string;symbol?:string}){
                   <span className="tlAbs">{absLabel(t.time)}</span>
                 </span>
                 <span><i className="tlSide">{buy?"Buy":"Sell"}</i></span>
-                <span className="tlNum tlUsd">{usd(value)}</span>
-                <span className="tlNum tlAmt">{tokens(t.amount)}</span>
-                <span className="tlNum tlPrice">{sigPrice(t.priceUsd)}</span>
                 <span>
                   {t.behaviour
                     ? <i className="tlBehav" data-kind={behavKind(t.behaviour)} title={`${t.behaviour} — wallet behaviour derived from this token's trades`}>{t.behaviour}</i>
                     : <span className="tlDim">—</span>}
                 </span>
+                <span className="tlNum tlUsd">{usd(value)}</span>
+                <span className="tlNum tlAmt">{tokens(t.amount)}</span>
+                <span className="tlNum tlPrice">{sigPrice(t.priceUsd)}</span>
                 <span>
                   {t.wallet
                     ? <a className="tlTrader" href={`https://solscan.io/account/${t.wallet}`} target="_blank" rel="noreferrer" title={t.wallet}>

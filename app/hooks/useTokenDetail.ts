@@ -55,10 +55,19 @@ export interface TokenStats {
   top10Pct: number;
 }
 
+/** Lifetime buy/sell volume for a token, aggregated from every fill since its
+ * creation (all-time). Returned alongside the trades tab only. */
+export interface TradeTotals {
+  buysAll: number;
+  sellsAll: number;
+  volumeAll: number;
+}
+
 type TabData = Trade[] | Participant[] | Holder[] | FirstBuyer[] | TokenStats | null;
 
 export function useTokenDetail(mint: string | null, tab: string | null, limit = 50, refetchInterval = 0) {
   const [data, setData] = useState<TabData>(null);
+  const [totals, setTotals] = useState<TradeTotals | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,6 +79,7 @@ export function useTokenDetail(mint: string | null, tab: string | null, limit = 
     setLoading(true);
     setError(null);
     setData(null);
+    setTotals(null);
 
     const tabParam = tab.toLowerCase().replace(/\s+/g, '-');
     fetch(`${API_URL}/api/token-detail/${mint}?tab=${tabParam}&limit=${limit}`)
@@ -81,7 +91,7 @@ export function useTokenDetail(mint: string | null, tab: string | null, limit = 
         return res.json();
       })
       .then(json => {
-        if (!cancelled) { setData(json.data); setError(null); }
+        if (!cancelled) { setData(json.data); setTotals(json.totals ?? null); setError(null); }
       })
       .catch(err => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -110,7 +120,10 @@ export function useTokenDetail(mint: string | null, tab: string | null, limit = 
         );
         if (!res.ok) return;
         const json = await res.json();
-        if (!cancelled) setData(json.data);
+        if (!cancelled) {
+          setData(json.data);
+          if (json.totals) setTotals(json.totals);
+        }
       } catch {
         // Transient poll failure: keep showing the last good snapshot.
       }
@@ -120,5 +133,5 @@ export function useTokenDetail(mint: string | null, tab: string | null, limit = 
     return () => { cancelled = true; controller.abort(); clearInterval(timer); };
   }, [mint, tab, limit, refetchInterval]);
 
-  return { data, loading, error };
+  return { data, totals, loading, error };
 }
