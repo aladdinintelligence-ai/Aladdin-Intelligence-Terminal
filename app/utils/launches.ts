@@ -1,6 +1,9 @@
 import type {LaunchFilters,LaunchLifecycle,LaunchSortKey,LaunchToken} from "@/app/types/launches";
 
+export const FRESH_LAUNCH_MAX_AGE_MINUTES=5*24*60;
 export const defaultLaunchFilters:LaunchFilters={search:"",marketCapMin:null,marketCapMax:null,liquidityMin:null,volumeMin:null,volumeChangeMin:null,ageMaxMinutes:null,lifecycle:[],bondingMin:null,migratedWithinMinutes:null,migrationSpecialistsMin:null,scalperShareMax:null,unknownShareMax:null,freshWalletsMin:null,sniperShareMax:null,bundlerShareMax:null,insider:"any",creatorSelling:"any"};
+
+const launchAgeMinutes=(token:LaunchToken)=>token.ageMinutes===null||!Number.isFinite(token.ageMinutes)?Infinity:token.ageMinutes;
 
 export const launchAcceptancePreset:LaunchFilters={...defaultLaunchFilters,marketCapMin:20000,marketCapMax:80000,volumeMin:20000,lifecycle:["new"],bondingMin:70,migrationSpecialistsMin:3,sniperShareMax:10};
 
@@ -46,8 +49,10 @@ export function filterLaunchTokens(tokens:LaunchToken[],filters:LaunchFilters){r
   return true;
 })}
 
+export function freshLaunchTokens(tokens:LaunchToken[]){return tokens.filter(token=>launchAgeMinutes(token)<=FRESH_LAUNCH_MAX_AGE_MINUTES)}
+
 export function sortLaunchTokens(tokens:LaunchToken[],sort:LaunchSortKey){return [...tokens].sort((a,b)=>{
-  if(sort==="newest")return a.ageMinutes-b.ageMinutes;
+  if(sort==="newest")return launchAgeMinutes(a)-launchAgeMinutes(b);
   if(sort==="market-cap")return b.marketCap-a.marketCap;
   if(sort==="liquidity")return b.liquidity-a.liquidity;
   if(sort==="volume")return b.volume-a.volume;

@@ -2,7 +2,7 @@
 import {useCallback,useEffect,useMemo,useState} from "react";
 import {Filter,Search,SlidersHorizontal,X} from "lucide-react";
 import type {LaunchFilters as LaunchFilterState,LaunchSortKey,LaunchToken} from "@/app/types/launches";
-import {clearLaunchFilter,defaultLaunchFilters,filterLaunchTokens,sortLaunchTokens} from "@/app/utils/launches";
+import {clearLaunchFilter,defaultLaunchFilters,filterLaunchTokens,freshLaunchTokens,sortLaunchTokens} from "@/app/utils/launches";
 import {LaunchActiveFilters} from "@/app/components/launches/LaunchActiveFilters";
 import {LaunchFilters} from "@/app/components/launches/LaunchFilters";
 import {LaunchTokenCard} from "@/app/components/launches/LaunchTokenCard";
@@ -40,8 +40,9 @@ export function LaunchesExperience(){
   useEffect(()=>{if(!hydrated)return;const save=()=>sessionStorage.setItem(STORAGE_KEY,JSON.stringify({tab,filters,sort,scrollY:window.scrollY}));save();window.addEventListener("pagehide",save);return()=>window.removeEventListener("pagehide",save)},[filters,hydrated,sort,tab]);
 
   const visible=useMemo(()=>{
-    return sortLaunchTokens(filterLaunchTokens(liveTokens,filters),sort);
-  },[filters,sort,liveTokens]);
+    const scoped=tab==="New"?freshLaunchTokens(liveTokens):liveTokens;
+    return sortLaunchTokens(filterLaunchTokens(scoped,filters),sort);
+  },[filters,sort,tab,liveTokens]);
 
   const removeFilter=useCallback((key:keyof LaunchFilterState)=>setFilters(current=>clearLaunchFilter(current,key)),[]);
 
