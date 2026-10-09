@@ -88,9 +88,9 @@ function ParticipantsPanel({data,loading,error}:{data:ParticipantGroups|null;loa
           </>
         ):(
           <>
-            <span>- - -</span>
-            <span>- - -</span>
-            <span>- - -</span>
+            <span>—</span>
+            <span>—</span>
+            <span>—</span>
           </>
         )}
       </div>
