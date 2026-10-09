@@ -2481,6 +2481,134 @@ main {
   color: #fff;
   padding: 10px 14px;
 }
+.searchResults {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.searchResults > li {
+  border-top: 1px solid var(--line);
+}
+.searchResults > li:first-child {
+  border-top: 0;
+}
+.searchResultRow {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 9px 12px;
+  color: #ddd;
+  cursor: pointer;
+}
+.searchResultRow:hover,
+.searchResultRow.active {
+  background: #15121f;
+  box-shadow: inset 3px 0 0 var(--purple);
+}
+.srCoin {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #4a3869;
+}
+.srCoin.letter {
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font: 700 15px Inter;
+}
+.srIdent {
+  min-width: 0;
+}
+.srIdent b {
+  display: block;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.srIdent b em {
+  font-size: 11px;
+  color: #777;
+  font-style: normal;
+  font-weight: 400;
+  margin-left: 6px;
+}
+.srIdent small {
+  display: block;
+  font: 9px "DM Mono";
+  color: #565064;
+  margin-top: 3px;
+}
+.srStats {
+  text-align: right;
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+.srStats b {
+  font: 500 13px "DM Mono";
+  color: #e8e8ef;
+}
+.srStats em {
+  font: 600 11px "DM Mono";
+  font-style: normal;
+}
+.srStats em.up {
+  color: var(--green);
+}
+.srStats em.down {
+  color: #ff5470;
+}
+.srStats small {
+  font: 8px "DM Mono";
+  color: #5c506b;
+}
+.searchEmpty,
+.emptySearch {
+  text-align: center;
+  padding: 35px;
+  color: #777;
+}
+.searchEmpty b,
+.emptySearch b {
+  display: block;
+  font-size: 15px;
+  color: #c9c4d8;
+}
+.searchEmpty span,
+.emptySearch span {
+  display: block;
+  font-size: 9px;
+  margin-top: 7px;
+}
+.searchEmpty .spin,
+.emptySearch .spin {
+  display: block;
+  margin: 0 auto 10px;
+  opacity: 0.45;
+}
+.searchEmpty.error b {
+  color: #ff8a63;
+}
+.searchAsk {
+  border: 1px solid #4a3869;
+  background: #14101d;
+  color: var(--purple);
+  padding: 9px 13px;
+  margin-top: 16px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
 .ifaContext {
   display: inline-flex;
   align-items: center;
