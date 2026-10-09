@@ -14,3 +14,4 @@ export * as clusterController from './cluster/clusterController.js';
 export * as historicalController from './historical/historicalController.js';
 export * as watchlistController from './watchlist/watchlistController.js';
 export * as alertsController from './alerts/alertsController.js';
+export * as searchController from './search/searchController.js';
