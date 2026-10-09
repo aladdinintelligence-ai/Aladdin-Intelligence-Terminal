@@ -80,9 +80,19 @@ function ParticipantsPanel({data,loading,error}:{data:ParticipantGroups|null;loa
     {groups.map((g,i)=>(
       <div className="terminalEvidenceRow" role="row" key={i}>
         <span><Badge color={behaviourColor[g.behaviour as keyof typeof behaviourColor]||"#8b7cf6"}>{g.behaviour}</Badge></span>
-        <span>{g.wallets??"—"}</span>
-        <span style={{color:"#22c55e"}}>{g.buys??"—"}</span>
-        <span style={{color:"#ef4444"}}>{g.sells??"—"}</span>
+        {g.wallets>0?(
+          <>
+            <span>{g.wallets??"—"}</span>
+            <span style={{color:"#22c55e"}}>{g.buys??"—"}</span>
+            <span style={{color:"#ef4444"}}>{g.sells??"—"}</span>
+          </>
+        ):(
+          <>
+            <span>- - -</span>
+            <span>- - -</span>
+            <span>- - -</span>
+          </>
+        )}
       </div>
     ))}
     <div className="terminalEvidenceRow" role="row" style={{fontWeight:700}}>
