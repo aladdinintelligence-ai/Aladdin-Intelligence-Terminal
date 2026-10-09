@@ -8,8 +8,13 @@ import {
 import dl from '../../providers/dataLayer.js';
 import { Token } from '../../models/token.model.js';
 
-const IMAGE_CACHE_TTL = 300_000;
-const imageCache = new Map();
+const DEX_CACHE_TTL = 300_000;
+const dexCache = new Map();
+
+// The New tab is a launch feed, not a lifecycle: anything older than five days
+// has no business being surfaced as a "new" token even if it still trades on
+// the bonding curve.
+const NEW_FRESH_MAX_AGE_MINUTES = 5 * 24 * 60;
 
 const FETCH_OPTS = { feed: 'launches', priority: 'user' };
 
@@ -33,56 +38,77 @@ function ageMinutes(isoString) {
   return (Date.now() - new Date(isoString).getTime()) / 60000;
 }
 
-async function enrichWithImageUrls(tokens) {
+async function enrichWithDexData(tokens, deriveAge) {
   const mints = tokens.map((t) => t.mint).filter(Boolean);
   if (!mints.length) return tokens;
 
-  // 1. Memory cache
-  const imageMap = new Map();
+  // 1. Memory cache (per-mint image URL + first-pair creation time).
+  const dexMap = new Map();
   const missing = [];
   for (const mint of mints) {
-    const cached = imageCache.get(mint);
-    if (cached && Date.now() - cached.ts < IMAGE_CACHE_TTL) {
-      if (cached.url) imageMap.set(mint, cached.url);
+    const cached = dexCache.get(mint);
+    if (cached && Date.now() - cached.ts < DEX_CACHE_TTL) {
+      dexMap.set(mint, cached);
     } else {
       missing.push(mint);
     }
   }
 
-  // 2. MongoDB
+  // 2. DexScreener for anything we don't have yet (routes through the data
+  // layer: token bucket, circuit breaker, budget accounting). The earliest
+  // pairCreatedAt is the token's true launch age; the supply-update block time
+  // only reflects its most recent supply change and can make old tokens look
+  // freshly minted.
+  let dexFetched = false;
   if (missing.length) {
-    const docs = await Token.find({ _id: { $in: missing } }).select('imageUrl').lean();
-    for (const doc of docs) {
-      if (doc.imageUrl) {
-        imageMap.set(doc._id, doc.imageUrl);
-        imageCache.set(doc._id, { url: doc.imageUrl, ts: Date.now() });
-      }
-    }
-    const stillMissing = missing.filter((m) => !imageMap.has(m));
-
-    // 3. DexScreener for any still missing (routes through the data layer:
-    // token bucket, circuit breaker, budget accounting).
-    if (stillMissing.length) {
-      try {
-        const res = await dl.dexBatch(stillMissing.slice(0, 30), { feed: 'launches' });
-        if (res && !res.error) {
-          for (const mint of stillMissing) {
-            const pairs = res[mint] || [];
-            const url = pairs[0]?.info?.imageUrl || null;
-            if (url) imageMap.set(mint, url);
-            imageCache.set(mint, { url, ts: Date.now() });
+    try {
+      const res = await dl.dexBatch(missing, { feed: 'launches' });
+      if (res && !res.error) {
+        dexFetched = true;
+        for (const mint of missing) {
+          const pairs = res[mint] || [];
+          let pairCreatedAt = null;
+          for (const pair of pairs) {
+            if (typeof pair.pairCreatedAt === 'number' && (pairCreatedAt === null || pair.pairCreatedAt < pairCreatedAt)) {
+              pairCreatedAt = pair.pairCreatedAt;
+            }
           }
+          const entry = {
+            url: pairs[0]?.info?.imageUrl || null,
+            pairCreatedAt,
+            ts: Date.now(),
+          };
+          dexCache.set(mint, entry);
+          dexMap.set(mint, entry);
         }
-      } catch (err) {
-        console.error(`[launches] DexScreener image fetch failed:`, err && err.message ? err.message : err);
+      }
+    } catch (err) {
+      console.error(`[launches] DexScreener age/image fetch failed:`, err && err.message ? err.message : err);
+    }
+  }
+
+  // 3. MongoDB image fallback for mints the DexScreener batch missed or that
+  // have no image there (only queried when the batch actually ran).
+  const mongoMissing = dexFetched ? mints.filter((mint) => !dexMap.get(mint)?.url) : missing.filter((mint) => !dexMap.get(mint));
+  if (mongoMissing.length) {
+    const docs = await Token.find({ _id: { $in: mongoMissing } }).select('imageUrl').lean();
+    for (const doc of docs) {
+      if (doc.imageUrl && !dexMap.get(doc._id)?.url) {
+        dexMap.set(doc._id, { ...(dexMap.get(doc._id) || {}), url: doc.imageUrl });
       }
     }
   }
 
-  return tokens.map((t) => ({
-    ...t,
-    imageUrl: imageMap.get(t.mint) || null,
-  }));
+  return tokens.map((t) => {
+    const dex = dexMap.get(t.mint);
+    let createdAt = t.createdAt;
+    if (dex && typeof dex.pairCreatedAt === 'number') {
+      createdAt = new Date(dex.pairCreatedAt).toISOString();
+    }
+    const out = { ...t, imageUrl: dex?.url || null, createdAt: createdAt || null };
+    if (deriveAge && createdAt) out.ageMinutes = ageMinutes(createdAt);
+    return out;
+  });
 }
 
 function baseToken(t, lifecycle) {
@@ -175,9 +201,12 @@ async function buildLaunches(tab, limit) {
   }
   const mapper = mappers[tab];
   const mapped = mapper(result.tokens);
-  const tokens = await enrichWithImageUrls(mapped);
+  const tokens = await enrichWithDexData(mapped, tab !== 'migrated');
+  const fresh = tab === 'new'
+    ? tokens.filter((t) => typeof t.ageMinutes === 'number' && Number.isFinite(t.ageMinutes) && t.ageMinutes <= NEW_FRESH_MAX_AGE_MINUTES)
+    : tokens;
   return {
-    data: tokens,
+    data: fresh,
     meta: { tab, count: tokens.length, source: dataProvider },
   };
 }
