@@ -1,1 +1,2 @@
 # Aladdin Intelligence
+rerender
