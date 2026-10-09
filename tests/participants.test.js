@@ -91,8 +91,8 @@ test('groupParticipants buckets wallets and sums buys/sells per behaviour', () =
   assert.deepEqual(mig, { behaviour: 'Migration Specialist', wallets: 1, buys: 11, sells: 11 });
 });
 
-test('groupParticipants handles an empty wallet list', () => {
-  assert.deepEqual(groupParticipants([], null), []);
+test('groupParticipants always returns every behaviour label, even empty ones', () => {
+  assert.deepEqual(groupParticipants([], null), PARTICIPANT_BEHAVIOUR_ORDER.map((behaviour) => ({ behaviour, wallets: 0, buys: 0, sells: 0 })));
 });
 
 test('a 20+ trade wallet with buys then sells after a long gap is not mislabelled as Scalper', () => {

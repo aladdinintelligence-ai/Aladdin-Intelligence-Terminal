@@ -88,6 +88,8 @@ export function annotateWallets(wallets, creator) {
 
 // Groups wallets into behaviour buckets so the tab can render a summary:
 // one row per behaviour with the wallet count and the totals for buys/sells.
+// Every label is always present so the UI can show "- - -" when a behaviour
+// has no wallets on the token yet.
 export function groupParticipants(wallets, creator) {
   const buckets = new Map();
   for (const w of wallets) {
@@ -98,5 +100,5 @@ export function groupParticipants(wallets, creator) {
     bucket.sells += w.sells || 0;
     buckets.set(label, bucket);
   }
-  return PARTICIPANT_BEHAVIOUR_ORDER.filter((label) => buckets.has(label)).map((label) => buckets.get(label));
+  return PARTICIPANT_BEHAVIOUR_ORDER.map((label) => buckets.get(label) || { behaviour: label, wallets: 0, buys: 0, sells: 0 });
 }
