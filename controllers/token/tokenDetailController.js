@@ -131,6 +131,15 @@ async function fetchTrades(mint) {
         }
         Transaction { Signature }
       }
+      totals: DEXTradeByTokens(
+        where: {
+          Trade: { Currency: { MintAddress: { is: "${mint}" } }, Amount: { gt: "0" } }
+        }
+      ) {
+        BuysAll: sum(of: Trade_AmountInUSD, if: { Trade: { Side: { Type: { is: buy } } } })
+        SellsAll: sum(of: Trade_AmountInUSD, if: { Trade: { Side: { Type: { is: sell } } } })
+        VolumeAll: sum(of: Trade_AmountInUSD)
+      }
     }
   }`;
   const { data } = await dlBq(query, ':trades', isEmptyTrades);
@@ -144,11 +153,21 @@ async function fetchTrades(mint) {
     signature: t.Transaction?.Signature || '',
   }));
 
+  // All-time buy/sell volume ("full-range" = every fill since the token's
+  // creation, no time filter), so the tape's Buys/Sells are lifetime totals
+  // instead of a 50-row window.
+  const tAll = data?.Solana?.totals?.[0] || {};
+  const totals = {
+    buysAll: parseFloat(tAll?.BuysAll) || 0,
+    sellsAll: parseFloat(tAll?.SellsAll) || 0,
+    volumeAll: parseFloat(tAll?.VolumeAll) || 0,
+  };
+
   // Creator is optional signal for the behaviour slider: tracked tokens carry
   // it in Mongo, but a missing/falling DB must never take the trades tab down.
   const creator = await findTokenCreator(mint);
 
-  return annotateTradesWithBehaviour(trades, creator);
+  return { trades: annotateTradesWithBehaviour(trades, creator), totals };
 }
 
 async function findTokenCreator(mint) {
@@ -363,10 +382,14 @@ async function fetchTokenStats(mint) {
 
 async function buildTab(tab, mint) {
   let data;
+  let totals = null;
   switch (tab) {
-    case 'trades':
-      data = await fetchTrades(mint);
+    case 'trades': {
+      const bundle = await fetchTrades(mint);
+      data = bundle.trades;
+      totals = bundle.totals;
       break;
+    }
     case 'participants':
       data = await fetchParticipants(mint);
       break;
@@ -385,6 +408,7 @@ async function buildTab(tab, mint) {
 
   return {
     data,
+    totals,
     meta: { mint, tab, count: Array.isArray(data) ? data.length : 1, source: dataProvider, fetchedAt: new Date().toISOString() },
   };
 }
