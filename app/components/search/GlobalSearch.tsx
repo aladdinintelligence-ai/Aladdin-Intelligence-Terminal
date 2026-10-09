@@ -1,5 +1,7 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ArrowRight, LoaderCircle, Search, X } from "lucide-react";
 import { searchTokens, TokenSearchResult } from "@/app/services/search";
@@ -27,7 +29,7 @@ function hueFor(mint: string): number {
 
 function TokenAvatar({ token }: { token: TokenSearchResult }) {
   if (token.imageUrl) {
-    // eslint-disable-next-line @next/next/no-img-element
+     
     return <img className="srCoin" src={token.imageUrl} alt={token.symbol} />;
   }
   return (
@@ -55,6 +57,11 @@ export function GlobalSearch() {
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(-1);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     try {
@@ -75,8 +82,16 @@ export function GlobalSearch() {
       }
       if (e.key === "Escape") setOpen(false);
     };
+    const openSearch = () => {
+      setOpen(true);
+      setTimeout(() => inputRef.current?.focus(), 0);
+    };
     addEventListener("keydown", key);
-    return () => removeEventListener("keydown", key);
+    addEventListener("aladdin:open-search", openSearch);
+    return () => {
+      removeEventListener("keydown", key);
+      removeEventListener("aladdin:open-search", openSearch);
+    };
   }, []);
 
   const trimmed = useMemo(() => query.trim(), [query]);
@@ -169,7 +184,7 @@ export function GlobalSearch() {
         <span>Search tokens…</span>
         <kbd>/</kbd>
       </button>
-      {open && (
+      {mounted && open && createPortal(
         <div
           className="searchOverlay"
           onMouseDown={(e) => {
@@ -308,7 +323,8 @@ export function GlobalSearch() {
               )}
             </main>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

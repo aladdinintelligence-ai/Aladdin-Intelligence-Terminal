@@ -12,4 +12,4 @@ function contextLabel(path:string){
   if(path.startsWith("/alerts"))return "Alerts";
   return "Aladdin";
 }
-export function MobileTopBar(){const path=usePathname();return <div className="mobileTopBar"><Link href="/launches" className="mobileBrand"><img src="/aladdin-logo.jpg" alt="Aladdin"/><span>{contextLabel(path)}</span></Link><div className="mobileTopActions"><button type="button" aria-label="Search Aladdin" onClick={()=>document.querySelector<HTMLButtonElement>(".navSearch")?.click()}><Search/></button><AccountControl/></div></div>}
+export function MobileTopBar(){const path=usePathname();return <div className="mobileTopBar"><Link href="/launches" className="mobileBrand"><img src="/aladdin-logo.jpg" alt="Aladdin"/><span>{contextLabel(path)}</span></Link><div className="mobileTopActions"><button type="button" aria-label="Search Aladdin" onClick={()=>window.dispatchEvent(new CustomEvent("aladdin:open-search"))}><Search/></button><AccountControl/></div></div>}
