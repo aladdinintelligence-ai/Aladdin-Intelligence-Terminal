@@ -98,7 +98,7 @@ export default function Live({params, searchParams}: {
               <LoaderCircle className="spin" size={24} style={{opacity: 0.4}} />
             </div>
           </section>
-          <IfaNow />
+          {/* <IfaNow /> */}
         </div>
         <div className="investigate" style={{padding: 40, display: "grid", placeItems: "center"}}>
           <LoaderCircle className="spin" size={24} style={{opacity: 0.4}} />
