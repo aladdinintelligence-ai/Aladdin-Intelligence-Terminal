@@ -47,11 +47,23 @@ test('a 20+ trade wallet buying early and selling late is a Migration Specialist
   assert.equal(classifyParticipant(w, null), 'Migration Specialist');
 });
 
-test('a 20+ trade wallet churning within short holding periods is a Scalper', () => {
-  const buyTimes = Array.from({ length: 11 }, (_, i) => NOW - i * 2 * MIN);
-  const sellTimes = Array.from({ length: 11 }, (_, i) => NOW - i * 2 * MIN + 2 * MIN);
-  const w = wallet({ buys: 11, sells: 11, trades: 22, buyTimesMs: buyTimes, sellTimesMs: sellTimes });
+test('a wallet that both buys and sells 2+ times is a Scalper (same rule as the transactions tab)', () => {
+  const w = wallet({ buys: 2, sells: 2, trades: 4, buyTimesMs: [NOW - 6 * MIN, NOW - 4 * MIN], sellTimesMs: [NOW - 5 * MIN, NOW - 3 * MIN] });
   assert.equal(classifyParticipant(w, null), 'Scalper');
+});
+
+test('holding time is irrelevant: steady buying and selling stays a Scalper', () => {
+  const w = wallet({
+    buys: 6, sells: 6, trades: 12,
+    buyTimesMs: Array.from({ length: 6 }, (_, i) => NOW - 50 * MIN - i * MIN),
+    sellTimesMs: Array.from({ length: 6 }, (_, i) => NOW - 45 * MIN - i * MIN),
+  });
+  assert.equal(classifyParticipant(w, null), 'Scalper');
+});
+
+test('a wallet with buys>=2 but only a single sell is not a Scalper -> Unknown Wallet', () => {
+  const w = wallet({ buys: 3, sells: 1, trades: 4, buyTimesMs: [NOW, NOW + MIN, NOW + 2 * MIN], sellTimesMs: [NOW - MIN] });
+  assert.equal(classifyParticipant(w, null), 'Unknown Wallet');
 });
 
 test('the creator of the token is always a Creator Wallet', () => {

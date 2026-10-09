@@ -12,12 +12,11 @@
 //                         dominant pattern in their trade history.
 //   3. Migration Specialist — repeatedly buys before migration, sells after:
 //                         average sell time is well after average buy time.
-//   4. Scalper           — repeatedly buys and sells within short holding
-//                         periods, regardless of profit or loss.
+//   4. Scalper           — buys >= 2 AND sells >= 2, the same indicator used
+//                         by the transactions tab.
 //   5. Unknown Wallet    — no dominant pattern could be identified.
 const FRESH_TRADE_MIN = 2;
 const MIG_SPEC_MIN_GAP_MS = 30 * 60 * 1000;
-const SCALPER_MAX_HOLD_MS = 15 * 60 * 1000;
 
 export const PARTICIPANT_BEHAVIOUR_ORDER = [
   'Migration Specialist',
@@ -32,26 +31,6 @@ function meanMs(values) {
   let sum = 0;
   for (const v of values) sum += v;
   return sum / values.length;
-}
-
-// Pairs each sell with the most recent earlier buy and returns the median
-// holding period in ms between the pairs, or null when no pair exists (e.g. a
-// wallet that only ever bought or only ever sold).
-function medianHoldMs(buys, sells) {
-  const b = [...buys].sort((x, y) => x - y);
-  const s = [...sells].sort((x, y) => x - y);
-  const holds = [];
-  for (const t of s) {
-    let i = b.length - 1;
-    while (i >= 0 && b[i] > t) i--;
-    if (i < 0) continue;
-    holds.push(t - b[i]);
-    b.splice(i, 1);
-  }
-  if (!holds.length) return null;
-  holds.sort((x, y) => x - y);
-  const mid = Math.floor(holds.length / 2);
-  return holds.length % 2 ? holds[mid] : (holds[mid - 1] + holds[mid]) / 2;
 }
 
 // group = { wallet, buys, sells, buyTimesMs, sellTimesMs }
@@ -74,8 +53,7 @@ export function classifyParticipant(group, creator) {
     ) {
       return 'Migration Specialist';
     }
-    const hold = medianHoldMs(times, sellTimes);
-    if (hold != null && hold <= SCALPER_MAX_HOLD_MS) return 'Scalper';
+    return 'Scalper';
   }
 
   return 'Unknown Wallet';
