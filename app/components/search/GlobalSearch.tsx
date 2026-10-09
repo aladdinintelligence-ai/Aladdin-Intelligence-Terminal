@@ -6,6 +6,13 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, LoaderCircle, Search, X } from "lucide-react";
 import { searchTokens, TokenSearchResult } from "@/app/services/search";
 import { money } from "@/app/utils/format";
+import {
+  clearFocusSearchInput,
+  closeSearch,
+  openSearch,
+  registerFocusSearchInput,
+  useSearchOpen,
+} from "@/app/components/search/searchBus";
 
 const HISTORY_KEY = "aladdin-search-history";
 
@@ -50,7 +57,7 @@ function formatPrice(p: number | null): string {
 export function GlobalSearch() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [open, setOpen] = useState(false);
+  const isOpen = useSearchOpen();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<TokenSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,6 +68,9 @@ export function GlobalSearch() {
 
   useEffect(() => {
     setMounted(true);
+    const focus = () => inputRef.current?.focus();
+    registerFocusSearchInput(focus);
+    return () => clearFocusSearchInput(focus);
   }, []);
 
   useEffect(() => {
@@ -77,21 +87,12 @@ export function GlobalSearch() {
         !(e.target instanceof HTMLTextAreaElement)
       ) {
         e.preventDefault();
-        setOpen(true);
-        setTimeout(() => inputRef.current?.focus(), 0);
+        openSearch();
       }
-      if (e.key === "Escape") setOpen(false);
-    };
-    const openSearch = () => {
-      setOpen(true);
-      setTimeout(() => inputRef.current?.focus(), 0);
+      if (e.key === "Escape") closeSearch();
     };
     addEventListener("keydown", key);
-    addEventListener("aladdin:open-search", openSearch);
-    return () => {
-      removeEventListener("keydown", key);
-      removeEventListener("aladdin:open-search", openSearch);
-    };
+    return () => removeEventListener("keydown", key);
   }, []);
 
   const trimmed = useMemo(() => query.trim(), [query]);
@@ -141,7 +142,7 @@ export function GlobalSearch() {
       } catch {}
       return next;
     });
-    setOpen(false);
+    closeSearch();
     setQuery("");
     router.push(`/live/${mint}`);
   }
@@ -151,7 +152,7 @@ export function GlobalSearch() {
       const hit = results[Math.max(0, active)];
       if (hit) navigate(hit.mint, `$${hit.symbol}`);
     } else if (trimmed) {
-      setOpen(false);
+      closeSearch();
       router.push(`/ask-aladdin?q=${encodeURIComponent(trimmed)}`);
     }
   }
@@ -175,20 +176,17 @@ export function GlobalSearch() {
     <>
       <button
         className="navSearch"
-        onClick={() => {
-          setOpen(true);
-          setTimeout(() => inputRef.current?.focus(), 0);
-        }}
+        onClick={openSearch}
       >
         <Search />
         <span>Search tokens…</span>
         <kbd>/</kbd>
       </button>
-      {mounted && open && createPortal(
+      {mounted && isOpen && createPortal(
         <div
           className="searchOverlay"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
+            if (e.target === e.currentTarget) closeSearch();
           }}
         >
           <section className="searchSurface">
@@ -221,7 +219,7 @@ export function GlobalSearch() {
                   <ArrowRight />
                 </button>
               </form>
-              <button className="closeSearch" onClick={() => setOpen(false)}>
+              <button className="closeSearch" onClick={closeSearch}>
                 ESC
               </button>
             </header>
