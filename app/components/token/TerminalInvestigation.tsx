@@ -1,9 +1,10 @@
 "use client";
 import {useState,type CSSProperties} from "react";
 import Link from "next/link";
-import {useTokenDetail,type Participant,type Holder,type FirstBuyer,type TokenStats} from "@/app/hooks/useTokenDetail";
+import {useTokenDetail,type Participant,type ParticipantGroups,type Holder,type FirstBuyer,type TokenStats} from "@/app/hooks/useTokenDetail";
 import {Skeleton} from "@/app/components/ui/Skeleton";
 import {Badge} from "@/app/components/ui/Badge";
+import {behaviourColor} from "@/app/utils/behaviour";
 import {LiveTradesLog} from "@/app/components/token/LiveTradesLog";
 import "@/app/components/ui/skeleton.css";
 
@@ -15,8 +16,8 @@ const TABS=["Transactions","Participants","Most Profitable","Largest Holders","F
 type Tab=(typeof TABS)[number];
 const DESCRIPTIONS:Record<Tab,string>={
   Transactions:"Recent on-chain buy/sell transactions for this token.",
-  Participants:"Wallets actively trading this token, ranked by volume.",
-  "Most Profitable":"Top wallets by estimated profit from this token.",
+  Participants:"Wallets trading this token, grouped by behavioural profile.",
+  "Most Profitable":"Top wallets by volume traded on this token.",
   "Largest Holders":"Wallets holding the largest share of supply.",
   "First 100":"The first 100 wallets to buy this token.",
   Holders:"Current holder distribution and concentration.",
@@ -65,7 +66,34 @@ function TransactionsPanel({mint,symbol}:{mint:string;symbol:string}){
   return <LiveTradesLog mint={mint} symbol={symbol}/>;
 }
 
-function ParticipantsPanel({data,loading,error}:{data:Participant[]|null;loading:boolean;error:string|null}){
+function ParticipantsPanel({data,loading,error}:{data:ParticipantGroups|null;loading:boolean;error:string|null}){
+  if(loading)return <TableSkeleton rows={5} cols={4}/>;
+  if(error)return <div className="launchEmpty"><b>Error</b><span>{error}</span></div>;
+  const groups=data?.groups||[];
+  if(!groups.length)return <div className="launchEmpty"><b>No participants found</b></div>;
+
+  const totalWallets=groups.reduce((s,g)=>s+g.wallets,0);
+  return <div className="terminalEvidenceTable" style={cols(4)}>
+    <div className="terminalEvidenceHead" role="row">
+      <span>BEHAVIOUR</span><span>WALLETS</span><span>BUYS</span><span>SELLS</span>
+    </div>
+    {groups.map((g,i)=>(
+      <div className="terminalEvidenceRow" role="row" key={i}>
+        <span><Badge color={behaviourColor[g.behaviour as keyof typeof behaviourColor]||"#8b7cf6"}>{g.behaviour}</Badge></span>
+        <span>{g.wallets??"—"}</span>
+        <span style={{color:"#22c55e"}}>{g.buys??"—"}</span>
+        <span style={{color:"#ef4444"}}>{g.sells??"—"}</span>
+      </div>
+    ))}
+    <div className="terminalEvidenceRow" role="row" style={{fontWeight:700}}>
+      <span>Total</span><span>{totalWallets}</span>
+      <span style={{color:"#22c55e"}}>{groups.reduce((s,g)=>s+(g.buys||0),0)}</span>
+      <span style={{color:"#ef4444"}}>{groups.reduce((s,g)=>s+(g.sells||0),0)}</span>
+    </div>
+  </div>;
+}
+
+function MostProfitablePanel({data,loading,error}:{data:Participant[]|null;loading:boolean;error:string|null}){
   if(loading)return <TableSkeleton rows={8} cols={6}/>;
   if(error)return <div className="launchEmpty"><b>Error</b><span>{error}</span></div>;
   if(!data?.length)return <div className="launchEmpty"><b>No participants found</b></div>;
@@ -81,7 +109,7 @@ function ParticipantsPanel({data,loading,error}:{data:Participant[]|null;loading
         <span style={{color:"#22c55e"}}>{p.buys??"—"}</span>
         <span style={{color:"#ef4444"}}>{p.sells??"—"}</span>
         <span>{fmtPrice(p.totalVolumeUsd)}</span>
-        <span><Badge color={p.behaviour==="Buyer"?"#22c55e":p.behaviour==="Seller"?"#ef4444":"#a78bfa"}>{p.behaviour}</Badge></span>
+        <span><Badge color={behaviourColor[p.behaviour as keyof typeof behaviourColor]||"#8b7cf6"}>{p.behaviour}</Badge></span>
       </div>
     ))}
   </div>;
@@ -169,11 +197,11 @@ export function TerminalInvestigation({mint,symbol,initialView="Transactions"}:{
     </div>
 
     {active==="Transactions"&&<TransactionsPanel mint={mint} symbol={symbol}/>}
-    {active==="Participants"&&<ParticipantsPanel data={data as Participant[]|null} loading={loading} error={error}/>}
+    {active==="Participants"&&<ParticipantsPanel data={data as ParticipantGroups|null} loading={loading} error={error}/>}
     {active==="Holders"&&<HoldersPanel data={data as Holder[]|null} loading={loading} error={error}/>}
     {active==="First 100"&&<FirstBuyersPanel data={data as FirstBuyer[]|null} loading={loading} error={error}/>}
     {active==="Live State"&&<LiveStatePanel mint={mint}/>}
-    {active==="Most Profitable"&&<ParticipantsPanel data={data as Participant[]|null} loading={loading} error={error}/>}
+    {active==="Most Profitable"&&<MostProfitablePanel data={(data as ParticipantGroups|null)?.wallets??null} loading={loading} error={error}/>}
     {active==="Largest Holders"&&<HoldersPanel data={data as Holder[]|null} loading={loading} error={error}/>}
     {active==="Historical Match"&&<div className="launchEmpty"><b>Coming soon</b><span>Historical pattern matching will be available after token sync.</span></div>}
   </div>;

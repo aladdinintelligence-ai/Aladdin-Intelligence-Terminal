@@ -25,7 +25,25 @@ export interface Participant {
   totalVolumeUsd: number;
   firstTrade: string;
   lastTrade: string;
+  /** Behaviour classification (Creator Wallet, Fresh Wallet, Migration
+   * Specialist, Scalper, Unknown Wallet). */
   behaviour: string;
+}
+
+/** One behaviour bucket on the Participants tab: the wallet count and the
+ * summed buy/sell counts for every wallet in the group. */
+export interface ParticipantGroup {
+  behaviour: string;
+  wallets: number;
+  buys: number;
+  sells: number;
+}
+
+/** Backend response for the participants tab: the grouped summary plus the
+ * per-wallet rows (ranked by volume) behind it. */
+export interface ParticipantGroups {
+  groups: ParticipantGroup[];
+  wallets: Participant[];
 }
 
 export interface Holder {
@@ -63,7 +81,7 @@ export interface TradeTotals {
   volumeAll: number;
 }
 
-type TabData = Trade[] | Participant[] | Holder[] | FirstBuyer[] | TokenStats | null;
+type TabData = Trade[] | Participant[] | ParticipantGroups | Holder[] | FirstBuyer[] | TokenStats | null;
 
 export function useTokenDetail(mint: string | null, tab: string | null, limit = 50, refetchInterval = 0) {
   const [data, setData] = useState<TabData>(null);
