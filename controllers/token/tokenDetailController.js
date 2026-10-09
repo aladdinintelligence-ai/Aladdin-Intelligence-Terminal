@@ -171,13 +171,65 @@ async function fetchTrades(mint) {
   return { trades: annotateTradesWithBehaviour(trades, creator), totals };
 }
 
-async function findTokenCreator(mint) {
+async function mongoCreator(mint) {
   if (!mongoose.connection || mongoose.connection.readyState !== 1) return null;
   try {
     const doc = await Token.findById(mint, { creator: 1, _id: 0 }).lean();
     return doc && doc.creator ? doc.creator : null;
   } catch (err) {
     console.error('[tokenDetail] creator lookup skipped:', err && err.message ? err.message : err);
+    return null;
+  }
+}
+
+async function findTokenCreator(mint) {
+  return mongoCreator(mint);
+}
+
+// Creator (dev wallet) resolution for the Participants tab.
+// Token.creator is only populated when a token has been through a provider
+// sync, which most live tokens never are. As a fallback we resolve the dev
+// wallet from the token's first-ever buy: on pump.fun the developer's launch
+// buy is the very first trade, so the earliest buyer is the best stand-in.
+// The result is cached in memory (it is a derived label, not an authoritative
+// Mongo field) and this function never throws — creator stays optional.
+const CREATOR_RESOLVE_TTL = 30 * 60 * 1000;
+const participantCreatorCache = new Map();
+
+async function findFirstBuyerWallet(mint) {
+  const query = `{
+    Solana {
+      DEXTradeByTokens(
+        limit: { count: 1 }
+        orderBy: { ascending: Block_Time }
+        where: {
+          Trade: { Currency: { MintAddress: { is: "${mint}" } }, Side: { Type: { is: buy } }, Amount: { gt: "0" } }
+        }
+      ) {
+        Trade { Account { Owner } }
+      }
+    }
+  }`;
+  const { data } = await dlBq(query, ':participantCreator', isEmptyTrades);
+  return data?.Solana?.DEXTradeByTokens?.[0]?.Trade?.Account?.Owner || null;
+}
+
+async function resolvedParticipantCreator(mint) {
+  const cached = participantCreatorCache.get(mint);
+  if (cached && Date.now() - cached.ts < CREATOR_RESOLVE_TTL) return cached.creator;
+
+  const synced = await mongoCreator(mint);
+  if (synced) {
+    participantCreatorCache.set(mint, { creator: synced, ts: Date.now() });
+    return synced;
+  }
+
+  try {
+    const first = await findFirstBuyerWallet(mint);
+    if (first) participantCreatorCache.set(mint, { creator: first, ts: Date.now() });
+    return first;
+  } catch (err) {
+    console.error('[tokenDetail] creator first-buy fallback failed:', err && err.message ? err.message : err);
     return null;
   }
 }
@@ -229,7 +281,7 @@ async function fetchParticipants(mint) {
   }
 
   // Creator is token-specific and anchors the Creator Wallet label.
-  const creator = await findTokenCreator(mint);
+  const creator = await resolvedParticipantCreator(mint);
 
   const wallets = [...byWallet.values()]
     .sort((a, b) => b.totalVolumeUsd - a.totalVolumeUsd)
