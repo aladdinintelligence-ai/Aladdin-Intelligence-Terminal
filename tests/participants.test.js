@@ -26,8 +26,8 @@ function wallet(overrides = {}) {
   };
 }
 
-test('a wallet with fewer than 20 trades is a Fresh Wallet', () => {
-  const w = wallet({ buys: 12, sells: 5, trades: 17, buyTimesMs: [1, 2, 3], sellTimesMs: [4, 5] });
+test('a wallet with fewer than 2 trades is a Fresh Wallet', () => {
+  const w = wallet({ buys: 1, sells: 0, trades: 1, buyTimesMs: [NOW] });
   assert.equal(classifyParticipant(w, null), 'Fresh Wallet');
 });
 
@@ -62,13 +62,13 @@ test('the creator of the token is always a Creator Wallet', () => {
 
 test('creator status is token-specific: the same address is Fresh on another token', () => {
   const creatorAddress = '8Gcj1H2j3k4l5m6n7o8p9q0r1s2t3u4v5w6x7y8z9a';
-  const w = wallet({ wallet: creatorAddress, buys: 3, trades: 3 });
+  const w = wallet({ wallet: creatorAddress, buys: 1, trades: 1 });
   assert.equal(classifyParticipant(w, null), 'Fresh Wallet');
 });
 
 test('annotateWallets attaches a behaviour label to every wallet row', () => {
   const rows = [
-    wallet({ wallet: 'a1', buys: 3, trades: 3 }),
+    wallet({ wallet: 'a1', buys: 1, sells: 0, trades: 1 }),
     wallet({ buys: 25, sells: 0, trades: 25 }),
   ];
   const labelled = annotateWallets(rows, null);
@@ -78,15 +78,15 @@ test('annotateWallets attaches a behaviour label to every wallet row', () => {
 
 test('groupParticipants buckets wallets and sums buys/sells per behaviour', () => {
   const rows = [
-    wallet({ wallet: 'a1', buys: 3, sells: 1, trades: 4 }),
-    wallet({ wallet: 'a2', buys: 5, sells: 2, trades: 7 }),
-    wallet({ wallet: 'a3', buys: 10, sells: 8, trades: 18 }),
+    wallet({ wallet: 'a1', buys: 1, sells: 0, trades: 1 }),
+    wallet({ wallet: 'a2', buys: 1, sells: 0, trades: 1 }),
+    wallet({ wallet: 'a3', buys: 1, sells: 0, trades: 1 }),
     wallet({ buys: 11, sells: 11, trades: 22, buyTimesMs: [1], sellTimesMs: [120 * MIN] }),
   ];
   const groups = groupParticipants(rows, null);
   assert.ok(groups.every((g) => PARTICIPANT_BEHAVIOUR_ORDER.includes(g.behaviour)));
   const fresh = groups.find((g) => g.behaviour === 'Fresh Wallet');
-  assert.deepEqual(fresh, { behaviour: 'Fresh Wallet', wallets: 3, buys: 18, sells: 11 });
+  assert.deepEqual(fresh, { behaviour: 'Fresh Wallet', wallets: 3, buys: 3, sells: 0 });
   const mig = groups.find((g) => g.behaviour === 'Migration Specialist');
   assert.deepEqual(mig, { behaviour: 'Migration Specialist', wallets: 1, buys: 11, sells: 11 });
 });

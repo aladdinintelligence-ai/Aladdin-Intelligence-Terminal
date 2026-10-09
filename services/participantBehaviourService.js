@@ -15,7 +15,7 @@
 //   4. Scalper           — repeatedly buys and sells within short holding
 //                         periods, regardless of profit or loss.
 //   5. Unknown Wallet    — no dominant pattern could be identified.
-const FRESH_TRADE_MIN = 20;
+const FRESH_TRADE_MIN = 2;
 const MIG_SPEC_MIN_GAP_MS = 30 * 60 * 1000;
 const SCALPER_MAX_HOLD_MS = 15 * 60 * 1000;
 
