@@ -22,7 +22,6 @@ export function volumeChange(token:LaunchToken){
   return Math.round(((token.volume-token.previousHourVolume)/token.previousHourVolume)*100);
 }
 
-export function volumeWindow(token:LaunchToken){const a=token.ageMinutes;return a===null||!Number.isFinite(a)?"—":a<1?"<1m":a<60?`${Math.floor(a)}m`:"1H"}
 export function participantTotal(token:LaunchToken){return Object.values(token.participants).reduce((sum,value)=>sum+value,0)}
 export function participantShare(token:LaunchToken,key:"scalpers"|"unknown"){const total=participantTotal(token);return total?token.participants[key]/total*100:0}
 

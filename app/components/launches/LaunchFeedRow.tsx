@@ -7,7 +7,6 @@ import {
   countCompact,
   moneyCompact,
   volumeChange,
-  volumeWindow,
 } from "@/app/utils/launches";
 import { SyntheticTokenImage } from "@/app/components/launches/SyntheticTokenImage";
 
@@ -56,7 +55,6 @@ export function LaunchFeedRow({
           <span>
             <small>VOL</small>
             <b className="launchLiveValue">{moneyCompact(token.volume)}</b>
-            <em>· {volumeWindow(token)}</em>
             {change !== null ? (
               <i className={change >= 0 ? "volumeUp" : "volumeDown"}>
                 {change >= 0 ? "â†‘" : "â†“"}

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import {Bolt,Sparkles} from "lucide-react";
 import type {LaunchToken} from "@/app/types/launches";
-import {ageLabel,countCompact,moneyCompact,volumeChange,volumeWindow} from "@/app/utils/launches";
+import {ageLabel,countCompact,moneyCompact,volumeChange} from "@/app/utils/launches";
 import {SyntheticTokenImage} from "@/app/components/launches/SyntheticTokenImage";
 
 export function LaunchTokenCard({token,onBuy}:{token:LaunchToken;onBuy:(token:LaunchToken)=>void}){
@@ -22,7 +22,7 @@ export function LaunchTokenCard({token,onBuy}:{token:LaunchToken;onBuy:(token:La
     <div className="launchMarketGrid">
       <Metric label="MC" value={moneyCompact(token.marketCap)}/>
       <Metric label="LIQ" value={moneyCompact(token.liquidity)}/>
-      <div className="launchMetric"><small>VOL</small><b>{moneyCompact(token.volume)} <span>· {volumeWindow(token)}</span>{change!==null&&<em className={change>=0?"volumeUp":"volumeDown"}>{change>=0?"â†‘":"â†“"}{Math.abs(change)}%</em>}</b></div>
+      <div className="launchMetric"><small>VOL</small><b>{moneyCompact(token.volume)}{change!==null&&<em className={change>=0?"volumeUp":"volumeDown"}>{change>=0?"â†‘":"â†“"}{Math.abs(change)}%</em>}</b></div>
     </div>
     {token.lifecycle!=="migrated"&&token.bondingProgress!==null?<div className="launchLifecycle"><span><b>Bonding</b>{token.bondingProgress}%</span><div><i style={{width:`${token.bondingProgress}%`}}/></div></div>:<div className="launchPostMigration"><span>Holders <b>{token.holders===null?"Unavailable":countCompact(token.holders)}</b></span><span>TX <b>{token.transactions===null?"Unavailable":countCompact(token.transactions)}</b></span></div>}
     <div className="launchBehaviours" aria-label="Participant composition">
