@@ -3,7 +3,7 @@ import type {AnswerMode,AskAladdinAnswer,AskResultRow,ResultColumn,ResolvedAnaly
 export type QueryOperation="resolving"|"filtering"|"joining"|"calculating"|"ranking"|"formatting";
 export type ActivityStatus="pending"|"active"|"complete"|"error";
 export type AnalysisRunDepth="quick"|"deep";
-export type AskIntent="greeting"|"casual"|"data_query"|"definition"|"follow_up"|"ambiguous"|"unsupported";
+export type AskIntent="greeting"|"casual"|"platform"|"data_query"|"definition"|"follow_up"|"ambiguous"|"unsupported";
 export interface QueryFilter{field:string;operator:string;value:string|number|boolean}
 export interface QuerySort{field:string;direction:"asc"|"desc"}
 export interface QueryPlan{kind:"wallets"|"tokens"|"comparison"|"briefing"|"consultation";entityType:string;entityId?:string;filters:QueryFilter[];columns:string[];sort?:QuerySort;limit?:number;analysisPeriod:ResolvedAnalysisPeriod}

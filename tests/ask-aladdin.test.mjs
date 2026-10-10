@@ -35,3 +35,13 @@ test("chat auto-scrolls the newest message into view and honours scroll pinning"
   assert.match(ws,/prefers-reduced-motion/);
   assert.match(css,/\.askScrollEnd\{[^}]*scroll-margin-bottom/,"sentinel needs scroll margin to clear the sticky composer");
 });
+test("platform guidance answers carry validated, clickable page actions",()=>{
+  const answer=fs.readFileSync(path.join(root,"app/components/ask-aladdin/StructuredAnswer.tsx"),"utf8");
+  const types=fs.readFileSync(path.join(root,"app/types/ask-aladdin.ts"),"utf8");
+  const intents=fs.readFileSync(path.join(root,"app/types/analytics/query.ts"),"utf8");
+  assert.match(types,/page_actions\?:\{label:string;route:string\}\[\]/,"the answer contract must carry page actions");
+  assert.match(intents,/"platform"/,"AskIntent must include the platform intent");
+  assert.match(answer,/structured\.page_actions\?\?\[\]/,"platform answers read page actions with a safe default");
+  assert.match(answer,/className="answerPageActions"/,"page actions must render as a group");
+  assert.match(answer,/actions\.map\(action=><Link key=\{action\.route\} href=\{action\.route\}>/,"each page action routes to a real page");
+});
