@@ -13,6 +13,14 @@ import {
   tokenColumns,
   walletColumns,
 } from './aiTools.js';
+import {
+  buildPlatformSystemPrompt,
+  detectPlatformIntent,
+  platformFallbackAnswer,
+  selectPages,
+  toPageActions,
+  PLATFORM_PAGE_IDS,
+} from './platformKnowledge.js';
 
 const pause = (duration = 420) => new Promise((resolve) => setTimeout(resolve, duration));
 
@@ -66,6 +74,8 @@ function resolveAskIntent(request) {
   const question = request.question.trim();
   if (MINT_RE.test(question)) return { intent: 'data_query' };
   if (GREETING_RE.test(question)) return { intent: 'greeting', reply: 'Hi there. What would you like to investigate?' };
+  const platform = detectPlatformIntent(question);
+  if (platform.matched) return { intent: 'platform', topic: platform.topic || null };
   if (CASUAL_RE.test(question)) return { intent: 'casual', reply: "I'm ready. Ask me about a token, wallet or market change." };
   if (request.hasPriorContext && /^(who|when|are|how|why|what changed|and|then|so)\b/i.test(question)) return { intent: 'follow_up' };
   if (DEFINITION_RE.test(question)) {
@@ -380,7 +390,28 @@ async function composeNarrative(mode, plan, dataset, question, entityLabel, dept
   return narrative;
 }
 
-function conversationalAnswer(request, intent) {
+async function composePlatformNarrative(question, mode, depth = 'quick') {
+  const system = { role: 'system', content: buildPlatformSystemPrompt() };
+  const user = {
+    role: 'user',
+    content: JSON.stringify({
+      task: 'Answer the question about the Aladdin Intelligence platform. Return JSON only: {"answer": string, "pages": string[], "follow_ups": string[]}',
+      question,
+      mode,
+      page_ids: PLATFORM_PAGE_IDS,
+    }),
+  };
+  const result = await chatJson([system, user], { tier: depth === 'deep' ? 'deep' : 'quick', maxTokens: 800 });
+  if (!result.ok || !result.content || typeof result.content.answer !== 'string' || !result.content.answer.trim()) {
+    return null;
+  }
+  const followUps = Array.isArray(result.content.follow_ups)
+    ? result.content.follow_ups.map((item) => String(item)).filter(Boolean).slice(0, 3)
+    : [];
+  return { answer: result.content.answer.trim(), pages: result.content.pages, follow_ups: followUps };
+}
+
+function conversationalAnswer(request, intent, extras = {}) {
   return {
     mode: request.mode,
     intent: intent.intent,
@@ -396,7 +427,8 @@ function conversationalAnswer(request, intent) {
     analysis_period: request.period,
     currency_display: null,
     profile_summary: '',
-    generated_follow_ups: [],
+    generated_follow_ups: extras.followUps || [],
+    page_actions: extras.pageActions || [],
     full_query_link: '/queries',
     export_options: [],
     data_details: { evidenceSnapshotId: '', evidenceHash: '', coverage: '', limitations: [] },
@@ -448,6 +480,21 @@ export async function runAskAladdin(request, { onActivity = () => {}, pauseMs = 
   }
 
   if (!isData) {
+    if (resolved.intent === 'platform') {
+      let answer;
+      await operate('resolving', 'Consulting the Aladdin platform guide', async () => {
+        const narrative = await composePlatformNarrative(request.question, request.mode, request.depth || 'quick');
+        const pageIds = narrative?.pages?.length ? narrative.pages : selectPages(request.question);
+        const pageActions = toPageActions(pageIds);
+        answer = conversationalAnswer(
+          request,
+          { intent: 'platform', reply: narrative?.answer || platformFallbackAnswer(request.question, pageIds) },
+          { pageActions, followUps: narrative?.follow_ups || [] },
+        );
+      });
+      const dataset = { columns: [], rows: [], totalRows: 0, displayedRows: 0, availability: 'unavailable' };
+      return { answer, queryPlan: null, dataset, activityEvents: events };
+    }
     let answer;
     await operate('resolving', 'Thinking', async () => {
       answer = conversationalAnswer(request, resolved);
