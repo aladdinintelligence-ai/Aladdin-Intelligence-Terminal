@@ -7,6 +7,20 @@ interface GoogleCredentialResponse {
   credential: string;
 }
 
+// PromptMomentNotification reported by the One Tap `prompt()` call. We use it
+// to tell the difference between "the user is signing in" and "Google decided
+// not to show the window at all" (popup blocked, no Google session, origin not
+// authorized, One Tap suppressed, ...). Without it a caller has no way to stop
+// a spinner that would otherwise hang forever.
+export interface GooglePromptNotification {
+  isNotDisplayed: () => boolean;
+  isSkippedMoment: () => boolean;
+  isDismissedMoment: () => boolean;
+  getNotDisplayedReason?: () => string;
+  getSkippedReason?: () => string;
+  getDismissedReason?: () => string;
+}
+
 declare global {
   interface Window {
     google?: {
@@ -16,7 +30,9 @@ declare global {
             client_id: string;
             callback: (response: GoogleCredentialResponse) => void;
           }) => void;
-          prompt: () => void;
+          prompt: (
+            momentListener?: (notification: GooglePromptNotification) => void,
+          ) => void;
         };
       };
     };
@@ -36,6 +52,10 @@ export function loadGoogleScript(): Promise<void> {
     );
     if (existing) {
       existing.addEventListener("load", () => resolve());
+      // A previously failed load would leave the tag without ever firing again.
+      existing.addEventListener("error", () =>
+        reject(new Error("Failed to load Google Identity Services")),
+      );
       return;
     }
     const script = document.createElement("script");
@@ -48,14 +68,18 @@ export function loadGoogleScript(): Promise<void> {
   });
 }
 
+// Throws (instead of silently returning) when sign-in cannot be attempted, so
+// the caller can surface a real message to the user.
 export function initGoogleAuth(
   callback: (idToken: string) => void,
+  onResult?: (notification: GooglePromptNotification) => void,
 ): void {
   if (!GOOGLE_CLIENT_ID) {
-    console.warn("Google Client ID not configured");
-    return;
+    throw new Error("Google sign-in is not configured");
   }
-  if (!window.google?.accounts?.id) return;
+  if (!window.google?.accounts?.id) {
+    throw new Error("Google Identity Services failed to load");
+  }
   if (!googleInitialized) {
     window.google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,
@@ -63,7 +87,16 @@ export function initGoogleAuth(
     });
     googleInitialized = true;
   }
-  window.google.accounts.id.prompt();
+  window.google.accounts.id.prompt((notification) => {
+    if (!notification || !onResult) return;
+    if (
+      notification.isNotDisplayed() ||
+      notification.isSkippedMoment() ||
+      notification.isDismissedMoment()
+    ) {
+      onResult(notification);
+    }
+  });
 }
 
 export async function googleLogin(idToken: string): Promise<AuthResponse> {

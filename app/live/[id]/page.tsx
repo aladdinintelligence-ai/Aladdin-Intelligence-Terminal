@@ -1,7 +1,7 @@
 "use client";
 import {use,useState} from "react";
 import {useRouter} from "next/navigation";
-import {ExternalLink,Globe,Twitter,LoaderCircle} from "lucide-react";
+import {Copy,ExternalLink,Globe,Twitter,LoaderCircle} from "lucide-react";
 import {useTokenInfo} from "@/app/hooks/useTokenInfo";
 import {useTokenChart} from "@/app/hooks/useTokenChart";
 import {Skeleton} from "@/app/components/ui/Skeleton";
@@ -10,6 +10,7 @@ import {TerminalInvestigation} from "@/app/components/token/TerminalInvestigatio
 import {Badge} from "@/app/components/ui/Badge";
 import {WatchlistStar} from "@/app/components/token/WatchlistStar";
 import {money,pct} from "@/app/utils/format";
+import {toast} from "@/app/lib/toast";
 import "@/app/components/ui/skeleton.css";
 
 const INTERVAL_MAP: Record<string, number> = { "1m": 1, "5m": 5, "15m": 15, "1h": 60 };
@@ -84,8 +85,13 @@ export default function Live({params, searchParams}: {
   const [chartTf] = useState("5m");
   useTokenChart(mint, INTERVAL_MAP[chartTf], 60);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(mint);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(mint);
+      toast("Token address copied");
+    } catch {
+      toast("Couldn't copy token address", "error");
+    }
   };
 
   if (loading) {
@@ -134,7 +140,11 @@ export default function Live({params, searchParams}: {
             ${token.symbol} <small>{token.name}</small>
           </h1>
           <p>
-            {shortMint(mint)} <button onClick={handleCopy} type="button">Copy</button> {"\u00b7"} {ageLabel(token.pairCreatedAt)} old
+            {shortMint(mint)}{" "}
+            <button onClick={handleCopy} type="button" className="copyAddressBtn" aria-label="Copy token address" title="Copy token address">
+              <Copy size={12}/>
+            </button>{" "}
+            {"\u00b7"} {ageLabel(token.pairCreatedAt)} old
           </p>
         </div>
         <div className="heroMetrics">
