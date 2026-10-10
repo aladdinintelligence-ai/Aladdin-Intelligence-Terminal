@@ -1,0 +1,5 @@
+"use client";
+import Link from "next/link";
+import type {AdaptivePresentation} from "@/app/types/ask-aladdin/adaptive";
+import {useAladdinWallet} from "@/app/hooks/useAladdinWallet";
+export function ContextualActions({presentation}:{presentation:AdaptivePresentation}){const wallet=useAladdinWallet();if(!presentation.token)return null;const action=presentation.executionAction||"BUY";return <div className="adaptiveActions"><button type="button" onClick={()=>wallet.connected?undefined:wallet.openWalletModal({reason:(presentation.token?.symbol||"Token")+" "+action+" · resume this consultation after connection"})} title={wallet.connected?"Execution is not connected to a transaction builder yet":"Connect wallet to trade"}>{action}</button><Link href={`/live/${presentation.token.id}?view=${encodeURIComponent(presentation.terminalView||"Live State")}`}>Open Terminal</Link></div>}

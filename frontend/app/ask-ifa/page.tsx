@@ -1,0 +1,2 @@
+import {redirect} from "next/navigation";
+export default async function AskIfaCompatibility({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}){const params=await searchParams;const query=new URLSearchParams();Object.entries(params).forEach(([key,value])=>Array.isArray(value)?value.forEach(item=>query.append(key,item)):value!==undefined&&query.set(key,value));redirect(`/ask-aladdin${query.size?`?${query.toString()}`:""}`)}

@@ -1,0 +1,2 @@
+import type {AdaptiveComparisonRow} from "@/app/types/ask-aladdin/adaptive";
+export function BeforeAfterComparison({title="SINCE YOUR ENTRY",rows}:{title?:string;rows:AdaptiveComparisonRow[]}){if(!rows.length)return null;return <section className="beforeAfterComparison"><small>{title}</small><div className="beforeAfterRow head"><b>Metric</b><b>Before</b><b>Now</b><b>Change</b></div>{rows.map(row=><div className="beforeAfterRow" key={row.label}><span>{row.label}</span><span>{row.before}</span><span>{row.now}</span><strong>{row.change}</strong></div>)}</section>}

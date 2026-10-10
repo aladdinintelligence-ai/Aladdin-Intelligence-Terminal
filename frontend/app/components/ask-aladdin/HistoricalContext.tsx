@@ -1,0 +1,2 @@
+import type {AdaptivePresentation} from "@/app/types/ask-aladdin/adaptive";import {KpiGroup} from "./KpiGroup";
+export function HistoricalContext({value}:{value:NonNullable<AdaptivePresentation["historical"]>}){return <section className="historicalContext"><small>HISTORICAL CONTEXT</small><p>{value.matches} available historical formations matched this evidence pattern.</p><KpiGroup items={value.metrics}/><p>{value.summary}</p></section>}

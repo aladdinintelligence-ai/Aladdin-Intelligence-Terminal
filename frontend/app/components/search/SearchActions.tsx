@@ -1,0 +1,2 @@
+import Link from "next/link";import {BrainCircuit,ChartNoAxesCombined} from "lucide-react";
+export function SearchActions({tokenId,context,label}:{tokenId?:string;context:string;label:string}){return <div className="searchActions">{tokenId&&<Link className="primarySearchAction" href={`/live/${tokenId}`}><ChartNoAxesCombined/>Open Terminal</Link>}<Link href={`/ask-aladdin?context=${encodeURIComponent(context)}&label=${encodeURIComponent(label)}`}><BrainCircuit/>Ask Aladdin</Link></div>}

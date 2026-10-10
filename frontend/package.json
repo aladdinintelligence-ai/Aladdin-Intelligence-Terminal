@@ -1,0 +1,31 @@
+{
+    "name": "aladdin",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start",
+        "lint": "eslint",
+        "test": "node --test tests/ask-aladdin.test.mjs tests/workspace.test.mjs tests/theme.test.mjs tests/table-first.test.mjs tests/mobile-workspace-activity.test.mjs tests/latest-corrections.test.mjs tests/adaptive-ask-aladdin.test.mjs tests/launches-refinement.test.mjs tests/wallet-connect.test.mjs tests/mobile-trader-ux.test.mjs tests/ui-degradation.test.mjs tests/watchlist.test.mjs tests/trades-behaviour.test.mjs tests/alerts-live.test.mjs"
+    },
+    "dependencies": {
+        "@solana/spl-token": "^0.4.15",
+        "@solana/spl-token-metadata": "^0.1.6",
+        "@solana/wallet-adapter-base": "^0.9.27",
+        "@solana/wallet-adapter-react": "^0.15.39",
+        "@solana/web3.js": "^1.98.4",
+        "lucide-react": "^0.460.0",
+        "next": "^15.3.3",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20",
+        "@types/react": "^19",
+        "@types/react-dom": "^19",
+        "eslint": "^9",
+        "eslint-config-next": "^15.3.3",
+        "typescript": "^5"
+    }
+}

@@ -1,0 +1,2 @@
+import type {AdaptiveSeriesPoint} from "@/app/types/ask-aladdin/adaptive";
+export function EvidenceTimeline({points}:{points:AdaptiveSeriesPoint[]}){const max=Math.max(...points.map(point=>point.value),1);return <div className="evidenceTimeline" aria-label="Early-life evidence timeline">{points.map(point=><div key={point.label}><span>{point.label}</span><i style={{width:`${Math.max(8,point.value/max*100)}%`}}/><b>{point.display}</b><small>{point.secondary}</small></div>)}</div>}

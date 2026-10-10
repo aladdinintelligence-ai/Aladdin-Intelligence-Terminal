@@ -1,0 +1,29 @@
+/* Table-first Ask Aladdin response */
+.structuredQueryAnswer>h2{margin:0 0 10px;font-size:16px}.queryResult{border:1px solid var(--border);background:var(--surface)}
+.queryTableTools{display:flex;align-items:center;gap:7px;padding:7px;border-bottom:1px solid var(--border);background:var(--surface-elevated)}
+.queryTableTools input,.queryTableTools select{min-width:0;padding:7px;border:1px solid var(--border);background:var(--input-bg);color:var(--input-text)}
+.queryTableTools input{flex:1}.currencySwitch{display:flex;border:1px solid var(--border)}.currencySwitch button{border:0;background:transparent;color:var(--text-secondary);padding:7px 9px}.currencySwitch button.active{background:var(--selected-surface);color:var(--brand-purple)}
+.queryTableScroll{overflow-x:auto;max-width:100%;scrollbar-color:var(--border-strong) var(--surface-subtle)}.queryResult table{width:100%;min-width:820px;border-collapse:collapse}.queryResult th,.queryResult td{padding:9px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;font-size:9px}.queryResult th{position:sticky;top:0;background:var(--surface-elevated);color:var(--text-metadata);font:8px DM Mono}.queryResult td{color:var(--text-secondary)}.queryResult td:first-child,.queryResult td:last-child{color:var(--text-primary)}.queryResult a{color:var(--purple-readable);text-decoration:none}.queryResult .buy{color:var(--positive)}.queryResult .sell{color:var(--negative)}
+.contractCell{display:flex;align-items:center;gap:5px}.contractCell button{display:grid;place-items:center;border:0;background:transparent;color:var(--icon);padding:3px}.contractCell svg{width:12px}
+.profileSummary{margin:10px 0 0;padding:10px;border-left:2px solid var(--brand-purple);background:var(--surface-subtle);color:var(--text-secondary);line-height:1.55}.resultActions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.resultActions a,.resultActions button{padding:7px 9px;border:1px solid var(--border);background:var(--surface);color:var(--purple-readable);text-decoration:none;font-size:9px}.dataDetails{margin-top:8px;color:var(--text-muted);font-size:9px}.dataDetails summary{cursor:pointer;color:var(--text-metadata)}.noQueryResults{padding:14px;border:1px solid var(--border);background:var(--surface-subtle)}.noQueryResults p{color:var(--text-secondary)}
+
+/* Every major surface follows the resolved global theme. */
+.topbar,.ticker,.signalStrip,.decisionQuestion,.chartPanel,.ifaNow,.heroVisual,.askComposer,.syntheticDisclosure,.mobileDock{
+  background:var(--surface);color:var(--text-primary);border-color:var(--border)
+}
+.topbar{background:var(--surface-elevated);color:var(--text-secondary)}.topbar b,.topbar strong{color:var(--text-primary)}
+.ticker{background:var(--surface)}.ticker a{color:var(--text-secondary);border-color:var(--border)}.ticker b{color:var(--purple-readable)}
+.signalStrip,.decisionQuestion{background:var(--surface-subtle);color:var(--text-secondary)}
+.chartPanel,.ifaNow{background:var(--surface);color:var(--text-primary)}.chartPanel .chartTools,.chartPanel .chartFooter,.ifaNow article p,.ifaNow header small{color:var(--text-metadata)}.chartPanel button,.ifaNow button{color:var(--purple-readable)}.ifaNow article,.ifaNow header{border-color:var(--border)}
+.chart{background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px)}
+.event{background:var(--surface-elevated);color:var(--purple-readable)}
+.heroVisual{background:radial-gradient(circle,var(--selected-surface) 0,transparent 64%)}
+.askComposer{box-shadow:0 16px 50px color-mix(in srgb,var(--text-primary) 12%,transparent)}.askComposer textarea{color:var(--input-text)}
+.syntheticDisclosure{background:var(--surface-subtle);color:var(--warning)}
+.mobileDrawerBackdrop{background:color-mix(in srgb,var(--text-primary) 35%,transparent)}
+
+@media(max-width:760px){
+ .queryTableTools{display:grid;grid-template-columns:1fr auto}.queryTableTools input{grid-column:1/-1}.queryResult table{min-width:720px}.queryResult th,.queryResult td{padding:9px 8px;font-size:9px}.queryResult th:first-child,.queryResult td:first-child{position:sticky;left:0;z-index:1;background:var(--surface)}.queryResult th:first-child{background:var(--surface-elevated);z-index:2}
+ .plainAnswer{padding-bottom:4px}.followUps{margin-bottom:12px}.askComposer{position:relative;bottom:auto;margin-top:16px;background:var(--surface);border-color:var(--border)}
+ .askConversation{padding-bottom:calc(72px + env(safe-area-inset-bottom))}.conversationTurn{padding-bottom:10px}.questionBlock{padding:12px 0}.structuredQueryAnswer>h2{font-size:14px;line-height:1.35}
+}

@@ -1,0 +1,2 @@
+import type {AdaptiveKpi} from "@/app/types/ask-aladdin/adaptive";
+export function KpiGroup({items}:{items:AdaptiveKpi[]}){return <div className="adaptiveKpis">{items.map(item=><div className={item.tone||"neutral"} key={item.label}><b>{item.value}</b><span>{item.label}</span>{item.detail?<small>{item.detail}</small>:null}</div>)}</div>}

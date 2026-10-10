@@ -1,0 +1,3 @@
+﻿import {BackButton} from "@/app/components/navigation/BackButton";
+const topics=["Getting Started","Search","Terminal","Ask Aladdin","Behaviour Labels","Smart Money","First 100","Market Formation","Insider Activity","Clusters","Historical Match","Data Coverage","Wallet Connect","API"];
+export default function Docs(){return <><BackButton fallback="/launches"/><div className="pageTitle"><div><span className="eyebrow">PRODUCT GUIDE</span><h1>Aladdin Docs</h1><p>Understand the evidence, workflows and current prototype boundaries.</p></div></div><div className="workspaceIndex">{topics.map(topic=><p key={topic}><b>{topic}</b><span>Documentation surface prepared for this product area.</span></p>)}</div></>}

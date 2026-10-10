@@ -1,0 +1,2 @@
+import {observations} from "@/app/data/intelligence";import {ArrowUpRight,BrainCircuit} from "lucide-react";
+export function IfaNow(){return <aside className="ifaNow"><header><BrainCircuit size={17}/><div><b>WHAT CHANGED</b><small>What changed that matters?</small></div><i>4</i></header>{observations.map(o=><article key={o.title} className={o.tone}><div><b>{o.title}</b><span>{o.metric}</span></div><p>{o.detail}</p><button>{o.action}<ArrowUpRight size={12}/></button></article>)}</aside>}

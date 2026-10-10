@@ -1,0 +1,7 @@
+export type AdaptiveView="summary"|"table"|"chart";
+export type AdaptivePresentationKind="token_consultation"|"kpi"|"timeline"|"flow"|"concentration"|"before_after"|"network"|"prose";
+export interface AdaptiveKpi{label:string;value:string;detail?:string;tone?:"positive"|"negative"|"neutral"}
+export interface AdaptiveSeriesPoint{label:string;value:number;display:string;secondary?:string}
+export interface AdaptiveComparisonRow{label:string;before:string;now:string;change:string}
+export interface AdaptiveTokenContext{id:string;symbol:string;name:string;mint:string;lifecycle:string;age:string;marketCap:number;liquidity:number;holders:number;formation:string;formationState:"Validated"|"Insufficient evidence";formationSummary:string}
+export interface AdaptivePresentation{kind:AdaptivePresentationKind;defaultView:AdaptiveView;availableViews:AdaptiveView[];headline:string;token?:AdaptiveTokenContext;kpis:AdaptiveKpi[];series:AdaptiveSeriesPoint[];comparisonRows:AdaptiveComparisonRow[];historical?:{matches:number;summary:string;metrics:AdaptiveKpi[]};behaviours:string[];coverage:{label:string;status:"complete"|"partial"|"unavailable"}[];terminalView?:string;executionAction?:"BUY"|"SELL"|"BUY MORE";sourceLabel?:string}

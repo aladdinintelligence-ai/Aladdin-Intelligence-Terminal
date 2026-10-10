@@ -1,0 +1,62 @@
+/* Opt-in visual-fidelity layer. It normalises rendering, never page geometry. */
+:root{
+  --aladdin-primary:var(--brand-purple);
+  --surface-base:var(--surface);
+  --surface-raised:var(--surface-elevated);
+  --surface-hover:var(--hover-surface);
+  --border-subtle:color-mix(in srgb,var(--border) 72%,transparent);
+  --metric-label:var(--text-metadata);
+  --behaviour-ms:var(--warning);
+  --behaviour-fw:var(--infrastructure);
+  --behaviour-sc:var(--negative);
+  --behaviour-un:#8e96a3;
+  --radius-small:6px;
+  --radius-medium:10px;
+  --motion-fast:120ms;
+  --motion-normal:220ms
+}
+
+/* Token investigation: same structure, clearer identity, metrics and evidence states. */
+.tokenHero{border-color:var(--border-subtle)}
+.tokenHero .coin.large{border:1px solid color-mix(in srgb,var(--aladdin-primary) 42%,var(--border));box-shadow:0 4px 14px color-mix(in srgb,var(--aladdin-primary) 15%,transparent),inset 0 1px 0 #ffffff30}
+.tokenName h1{font-weight:720;letter-spacing:-.25px}.tokenName h1 small{color:var(--text-secondary);font-weight:450}.tokenName p{color:var(--text-metadata)}
+.heroMetrics small{color:var(--metric-label);font-family:Inter,Arial,sans-serif;font-weight:650;letter-spacing:.45px}
+.heroMetrics b{color:var(--text-primary);font-weight:650;letter-spacing:-.2px}.heroMetrics>div{border-color:var(--border-subtle)}
+.investigate{background:var(--surface-base);border-color:var(--border-subtle);box-shadow:0 7px 22px color-mix(in srgb,var(--text-primary) 3%,transparent)}
+.investigate>.tabs{border-color:var(--border-subtle)}.investigate>.tabs button{color:var(--text-secondary);transition:color var(--motion-fast) ease,background-color var(--motion-fast) ease,border-color var(--motion-fast) ease}
+.investigate>.tabs button:hover{background:var(--surface-hover);color:var(--text-primary)}.investigate>.tabs button.active{color:var(--purple-readable);font-weight:650}
+.tableHeading h2{font-weight:700;letter-spacing:-.1px}.tableHeading p{color:var(--text-metadata)}
+.terminalEvidenceHead,.tr.head{background:var(--surface-raised);color:var(--metric-label);font-family:Inter,Arial,sans-serif;font-weight:650;letter-spacing:.45px}
+.terminalEvidenceRow,.tr{border-color:var(--border-subtle);transition:background-color var(--motion-fast) ease,box-shadow var(--motion-fast) ease}
+.terminalEvidenceRow:hover,.terminalEvidenceRow:focus-within,.tr:not(.head):hover,.tr:not(.head):focus-within{background:var(--surface-hover);box-shadow:inset 2px 0 0 color-mix(in srgb,var(--aladdin-primary) 52%,transparent)}
+.terminalEvidenceRow span:first-child,.tr:not(.head)>b:first-child{color:var(--text-primary);font-weight:650}
+
+/* Search-resolved token intelligence uses the same hierarchy without changing its composition. */
+.tokenPreview{background:var(--surface-base);color:var(--text-primary)}
+.tokenPreview .entityIdentity{border-color:var(--border-subtle)}
+.tokenPreview .coin.large{border:1px solid color-mix(in srgb,var(--aladdin-primary) 42%,var(--border));box-shadow:0 5px 16px color-mix(in srgb,var(--aladdin-primary) 14%,transparent),inset 0 1px 0 #ffffff30}
+.tokenPreview .entityIdentity h2{font-weight:740;letter-spacing:-.2px}.tokenPreview .entityIdentity h2 em{color:var(--text-secondary)}.tokenPreview .entityIdentity code{color:var(--text-metadata)}
+.tokenPreview .entityMetrics,.tokenPreview .earlyLife,.tokenPreview .lifecycle,.tokenPreview .observedBehaviour,.tokenPreview .dataCoverage,.tokenPreview .sinceSearch{background:var(--surface-base);border-color:var(--border-subtle);box-shadow:0 6px 20px color-mix(in srgb,var(--text-primary) 3%,transparent)}
+.tokenPreview .entityMetrics small,.tokenPreview .earlyLife small,.tokenPreview .lifecycle>small,.tokenPreview .observedBehaviour>small,.tokenPreview .dataCoverage header,.tokenPreview .sinceSearch>small{color:var(--metric-label);font-family:Inter,Arial,sans-serif;font-weight:650;letter-spacing:.45px}
+.tokenPreview .entityMetrics b,.tokenPreview .earlyGrid b,.tokenPreview .intelSummary b{color:var(--text-primary);font-weight:650}
+.tokenPreview .earlyLife button{transition:color var(--motion-fast) ease,background-color var(--motion-fast) ease}.tokenPreview .earlyLife button:hover{background:var(--surface-hover);color:var(--text-primary)}
+.tokenPreview .earlyLife button.active{background:var(--selected-surface);color:var(--purple-readable)}
+.tokenPreview .formationSummary{border-color:color-mix(in srgb,var(--aladdin-primary) 38%,var(--border));background:linear-gradient(90deg,color-mix(in srgb,var(--aladdin-primary) 9%,var(--surface)),var(--surface))}
+.tokenPreview .searchActions a{border-color:color-mix(in srgb,var(--aladdin-primary) 42%,var(--border));transition:filter var(--motion-fast) ease,background-color var(--motion-fast) ease,transform var(--motion-fast) ease}
+.tokenPreview .searchActions a:hover{background:color-mix(in srgb,var(--aladdin-primary) 10%,var(--surface));filter:brightness(1.05)}.tokenPreview .searchActions a:active{transform:scale(.985)}
+/* Search-based wallet intelligence: presentation polish only. */
+.walletPreview{background:var(--surface-base);border-color:var(--border-subtle);box-shadow:0 10px 30px color-mix(in srgb,var(--text-primary) 4%,transparent)}
+.walletPreview .entityIdentity{border-color:var(--border-subtle)}
+.walletPreview .walletConstellation{border:1px solid color-mix(in srgb,var(--aladdin-primary) 42%,var(--border));border-radius:var(--radius-medium);background:radial-gradient(circle at 45% 42%,color-mix(in srgb,var(--aladdin-primary) 13%,var(--surface-raised)),var(--surface-base));box-shadow:0 6px 18px color-mix(in srgb,var(--aladdin-primary) 13%,transparent),inset 0 1px 0 #ffffff22}
+.walletPreview .entityIdentity h2{font-weight:740;letter-spacing:-.2px}.walletPreview .entityIdentity small,.walletPreview .entityMetrics small,.walletPreview section>small{color:var(--metric-label);font-family:Inter,Arial,sans-serif;font-weight:650;letter-spacing:.45px}
+.walletPreview .entityIdentity code{color:var(--text-metadata)}.walletPreview .entityMetrics b{color:var(--text-primary);font-weight:650}.walletPreview .entityMetrics .buy{color:var(--positive)}
+.walletPreview .behaviourText{font-weight:650;text-shadow:0 0 9px color-mix(in srgb,currentColor 16%,transparent)}
+.walletPreview .previewTabs button{transition:color var(--motion-fast) ease,background-color var(--motion-fast) ease,border-color var(--motion-fast) ease}.walletPreview .previewTabs button:hover{background:var(--surface-hover);color:var(--text-primary)}
+.walletPreview .previewTable header{background:var(--surface-raised);color:var(--metric-label);font-family:Inter,Arial,sans-serif;font-weight:650;letter-spacing:.4px}
+.walletPreview .previewTable>a,.walletPreview .previewTable>div{border-color:var(--border-subtle);transition:background-color var(--motion-fast) ease,box-shadow var(--motion-fast) ease}
+.walletPreview .previewTable>a:hover,.walletPreview .previewTable>a:focus-visible,.walletPreview .previewTable>div:hover{background:var(--surface-hover);box-shadow:inset 2px 0 0 color-mix(in srgb,var(--aladdin-primary) 48%,transparent)}
+.walletPreview .previewTable b{color:var(--text-primary);font-weight:650}
+
+@media(prefers-reduced-motion:reduce){
+  .investigate>.tabs button,.terminalEvidenceRow,.tr,.tokenPreview .earlyLife button,.tokenPreview .searchActions a,.walletPreview .previewTabs button,.walletPreview .previewTable>a,.walletPreview .previewTable>div{transition:none}
+}

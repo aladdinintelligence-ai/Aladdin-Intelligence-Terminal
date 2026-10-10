@@ -1,0 +1,111 @@
+/* Global semantic theme layer. Settings is the only user-facing theme owner. */
+:root{
+  --page-bg:#07070a;--surface:#0d0d12;--surface-elevated:#111118;--surface-subtle:#17131e;
+  --surface-brand-dark:#0b0911;--text-primary:#eeeef5;--text-secondary:#aaaab6;--text-muted:#777787;
+  --text-metadata:#8d8d9a;--text-inverse:#f8f7ff;--border:#22222c;--border-strong:#3a3544;
+  --input-bg:#101016;--input-text:#eeeeF5;--placeholder:#777787;--nav-bg:#09090d;
+  --mobile-nav-bg:#09090df5;--icon:#aaaab6;--brand-purple:#9b7cff;--purple-readable:#b69cff;
+  --focus-ring:#b69cff;--disabled-surface:#15151b;--disabled-text:#656572;--hover-surface:#17131e;
+  --selected-surface:#21182e;--positive:#33d6a6;--negative:#ff5364;--warning:#f6b94a;--infrastructure:#36d9e8;
+  --bg:var(--page-bg);--panel:var(--surface);--panel2:var(--surface-elevated);--line:var(--border);
+  --muted:var(--text-muted);--text:var(--text-primary);--purple:var(--brand-purple);--green:var(--positive);
+  --red:var(--negative);--amber:var(--warning);--surface2:var(--surface-elevated);--soft:var(--surface-subtle);--input:var(--input-bg)
+}
+html[data-resolved-theme="light"]{
+  --page-bg:#f5f4f8;--surface:#ffffff;--surface-elevated:#fbfafe;--surface-subtle:#f0edf6;
+  --text-primary:#17141d;--text-secondary:#48434f;--text-muted:#66616e;--text-metadata:#514b59;
+  --border:#d7d2df;--border-strong:#aaa2b5;--input-bg:#ffffff;--input-text:#17141d;--placeholder:#77717e;
+  --nav-bg:#ffffff;--mobile-nav-bg:#fffffff2;--icon:#48434f;--brand-purple:#7552d6;--purple-readable:#6542c5;
+  --focus-ring:#7552d6;--disabled-surface:#ece9f0;--disabled-text:#827c89;--hover-surface:#f0edf6;
+  --selected-surface:#e9e1fb;--positive:#087c5f;--negative:#c72e43;--warning:#946100;--infrastructure:#08778a
+}
+html[data-resolved-theme="dark"]{color-scheme:dark}html[data-resolved-theme="light"]{color-scheme:light}
+html,body{background:var(--page-bg);color:var(--text-primary)}
+body,button,input,textarea,select{color:var(--text-primary)}
+input,textarea,select{background:var(--input-bg);color:var(--input-text);border-color:var(--border)}
+input::placeholder,textarea::placeholder{color:var(--placeholder)}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+button:disabled,[aria-disabled="true"]{background:var(--disabled-surface);color:var(--disabled-text)}
+
+/* Ordinary application surfaces */
+.appNav,.navMenuPanel,.mobileTopBar,.mobileDock,.mobileMoreDrawer,.mobileMoreDrawer>header,.accountMenu,
+.searchSurface,.workspaceSidebar,.investigationTools,.askConversation,.workspaceModal form,.workspaceIndex a,
+.workspaceIndex>p,.exportList article,.exportList>p,.dashboardPanels>section,.settingsGrid aside,.settingsGrid>section,
+.narrativeCard,.clusterCard,.historyLayout>section,.differencePanel,.tokenList,.tokenRow,.listHeader,.investigate,
+.evidenceRows,.alertList,.evidenceRow,.earlyLife,.lifecycle,.observedBehaviour,.dataCoverage,.sinceSearch{
+  background:var(--surface);border-color:var(--border);color:var(--text-primary)
+}
+.navMenuPanel a,.desktopNav>a,.mobileBrand,.mobileTopActions>button,.accountTrigger,.accountMenu nav a,
+.accountMenu nav button,.mobileDock a,.mobileDock button,.mobileDrawerGroup a,.workspaceSidebar nav a,
+.pageTitle p,.identity small,.metric span,.metric small,.narrativeCard p,.clusterCard p,.settingsNote,
+.settingInfo,.profileSettings label small,.settingSections label small,.tableHeading p,.terminalEvidenceRow,
+.tr,.evidenceRow span,.matchRow,.narrativeTokenDrivers>a{color:var(--text-secondary)}
+.eyebrow,.tokenName>span,.narrativeCard button,.clusterCard a,.tableHeading a,.ifaNow article button,
+.narrativeTopToken a,.terminalEvidenceRow span:nth-child(2),.tr a{color:var(--purple-readable)}
+.listHeader,.tr.head,.terminalEvidenceHead,.resultTableRow.head,.metric small,.heroMetrics small,
+.narrativeCard small,.narrativeTokenDrivers span small,.narrativeTokenDrivers>small,.settingSections h3,
+.helpGrid h3,.expandedSettings aside small,.investigationHistory section>small{color:var(--text-metadata)}
+.toolbar,.rowActions a,.rowActions button,.profileSettings input,.settingSections select,.themeChoices button,
+.accountMenu section button,.walletSettings>button,.workspaceDrawerButton,.tableControls input,.tableControls select,
+.tableControls summary{background:var(--input-bg);border-color:var(--border);color:var(--text-secondary)}
+.toolbar>button:hover,.sidebar nav a:hover,.settings:hover,.helpGrid button:hover,.accountMenu nav a:hover,
+.accountMenu nav button:hover{background:var(--hover-surface);color:var(--text-primary)}
+.tabs button.active,.themeChoices button.selected,.mobileDrawerGroup a.active,.investigationHistory article.active{
+  background:var(--selected-surface);color:var(--text-primary);border-color:var(--brand-purple)
+}
+.themeChoices button small{color:var(--text-muted)}
+.dataTable,.resultTable,.terminalEvidenceTable{scrollbar-color:var(--border-strong) var(--surface-subtle)}
+.resultTableRow,.tr,.terminalEvidenceHead,.terminalEvidenceRow,.tokenRow,.evidenceRow,.narrativeTokenDrivers>a{
+  border-color:var(--border)
+}
+
+/* Light-mode corrections for fixed dark legacy declarations. */
+html[data-resolved-theme="light"] .appNav,html[data-resolved-theme="light"] .mobileTopBar,
+html[data-resolved-theme="light"] .mobileDock{background:var(--mobile-nav-bg);border-color:var(--border)}
+html[data-resolved-theme="light"] .brand,html[data-resolved-theme="light"] .mobileBrand{color:var(--text-primary)}
+html[data-resolved-theme="light"] .desktopNav a,html[data-resolved-theme="light"] .navMenu button,
+html[data-resolved-theme="light"] .mobileDock a,html[data-resolved-theme="light"] .mobileDock button{color:var(--text-secondary)}
+html[data-resolved-theme="light"] .desktopNav .active,html[data-resolved-theme="light"] .mobileDock .active{color:var(--brand-purple)}
+html[data-resolved-theme="light"] .globalSearch,html[data-resolved-theme="light"] .navSearch,
+html[data-resolved-theme="light"] .accountTrigger,html[data-resolved-theme="light"] .mobileTopActions>button{background:var(--input-bg);color:var(--icon);border-color:var(--border)}
+html[data-resolved-theme="light"] .globalSearch input{color:var(--input-text)}
+html[data-resolved-theme="light"] .accountMenu{box-shadow:0 18px 50px #2c24301f}
+html[data-resolved-theme="light"] .accountMenu section p b,html[data-resolved-theme="light"] .settingInfo b,
+html[data-resolved-theme="light"] .clusterStats b,html[data-resolved-theme="light"] .metric b{color:var(--text-primary)}
+html[data-resolved-theme="light"] .tokenRow,html[data-resolved-theme="light"] .evidenceRow,
+html[data-resolved-theme="light"] .tr.head,html[data-resolved-theme="light"] .terminalEvidenceHead,
+html[data-resolved-theme="light"] .listHeader{background:var(--surface-elevated)}
+html[data-resolved-theme="light"] .tokenRow:hover,html[data-resolved-theme="light"] .evidenceRow:hover{background:var(--hover-surface)}
+html[data-resolved-theme="light"] .narrativeCard header>span,html[data-resolved-theme="light"] .narrativeCard small,
+html[data-resolved-theme="light"] .narrativeTopToken small,html[data-resolved-theme="light"] .narrativeTokenDrivers span small,
+html[data-resolved-theme="light"] .tokenName p,html[data-resolved-theme="light"] .migration span,
+html[data-resolved-theme="light"] .chartTools,html[data-resolved-theme="light"] .tableHeading p{color:var(--text-metadata)}
+html[data-resolved-theme="light"] .publicLanding{background:var(--page-bg);color:var(--text-primary)}
+html[data-resolved-theme="light"] .landingNav{background:var(--nav-bg);border-color:var(--border)}
+html[data-resolved-theme="light"] .landingNav nav a,html[data-resolved-theme="light"] .heroCopy>p,
+html[data-resolved-theme="light"] .landingFooter{color:var(--text-secondary)}
+html[data-resolved-theme="light"] .connectOptions button{background:var(--surface);color:var(--text-primary);border-color:var(--border)}
+
+/* Deliberate branded/terminal-dark surfaces retain explicit inverse contrast in either theme. */
+.topbar,.ticker,.signalStrip,.decisionQuestion,.chartPanel,.ifaNow,.heroVisual{
+  --text-primary:#f5f3fa;--text-secondary:#c2bdca;--text-muted:#aaa4b3;--text-metadata:#b7afc2;
+  --border:#34303d;--purple-readable:#c4b2ff;color:var(--text-primary)
+}
+.topbar{background:#0b0b0f;color:#aaa4b3}.topbar b,.topbar strong{color:#f0eef5}
+.ticker{background:#0e0c14}.ticker a{color:#b9b3c3;border-color:#302a38}.ticker b{color:#bda8ff}
+.chartPanel,.ifaNow{background:#0d0d12;border-color:#34303d;color:#f5f3fa}
+.chartPanel .chartTools,.chartPanel .chartFooter,.ifaNow article p,.ifaNow header small{color:#b1abb9}
+.chartPanel button,.ifaNow button{color:#c4b2ff}.ifaNow article,.ifaNow header{border-color:#34303d}
+.signalStrip,.decisionQuestion{background:#14101c;border-color:#493b60;color:#d4cedc}
+.heroVisual{background:radial-gradient(circle,#34205c 0,transparent 64%)}
+
+/* Semantic evidence colours remain stable in meaning, with theme-specific accessible values. */
+.buy,.good,.positive{color:var(--positive)}.sell,.bad,.negative{color:var(--negative)}
+.warn,.migrationEvidence{color:var(--warning)}.infrastructure{color:var(--infrastructure)}
+
+/* Profile onboarding is an ordinary modal surface, not a branded dark panel. */
+.profileGate{background:color-mix(in srgb,var(--page-bg) 88%,transparent)}
+.profileGate>div{background:var(--surface);border-color:var(--border-strong);box-shadow:0 30px 90px #18121f24;color:var(--text-primary)}
+.profileGate p,.profileGate small,.profileChoices span{color:var(--text-secondary)}
+.profileChoices button{background:var(--input-bg);border-color:var(--border);color:var(--text-primary)}
+.profileChoices button:hover{background:var(--hover-surface);border-color:var(--brand-purple)}

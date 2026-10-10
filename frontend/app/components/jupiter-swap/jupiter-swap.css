@@ -1,0 +1,88 @@
+/* Jupiter Swap Modal — matches native Solana swap UI (Jupiter / Phantom) */
+.jupModalBackdrop{position:fixed;inset:0;z-index:350;display:grid;place-items:center;padding:18px;background:color-mix(in srgb,var(--page-bg) 76%,transparent);backdrop-filter:blur(14px)}
+.jupModal{width:min(440px,100%);max-height:min(820px,calc(100dvh - 32px));overflow:auto;border:1px solid var(--border-strong);background:var(--surface-elevated);color:var(--text-primary);box-shadow:0 28px 90px color-mix(in srgb,#050308 55%,transparent);border-radius:24px;padding:0}
+
+/* Header */
+.jupModalHeader{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px}
+.jupModalHeader h2{margin:0;font-size:18px;font-weight:700;color:var(--text-primary)}
+.jupModalHeaderActions{display:flex;align-items:center;gap:6px}
+.jupSettingsBtn,.jupCloseBtn{display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--border);border-radius:12px;background:var(--input-bg);color:var(--text-secondary);cursor:pointer;transition:background .15s,border-color .15s}
+.jupSettingsBtn:hover,.jupCloseBtn:hover{background:var(--hover-surface);border-color:var(--brand-purple)}
+.jupCloseBtn{background:transparent;border-color:transparent}
+
+/* Slippage panel */
+.jupSlippagePanel{padding:0 20px 14px;display:grid;gap:8px}
+.jupSlippagePanel>span{color:var(--text-secondary);font-size:12px;font-weight:600}
+.jupSlippageOptions{display:flex;gap:6px;align-items:center}
+.jupSlippageOptions button{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.jupSlippageOptions button.active{border-color:var(--brand-purple);background:color-mix(in srgb,var(--brand-purple) 12%,var(--surface));color:var(--brand-purple-text)}
+.jupSlippageOptions input{width:60px;height:32px;padding:0 8px;border:1px solid var(--border);border-radius:10px;background:var(--input-bg);color:var(--text-primary);font-size:12px;text-align:center}
+.jupSlippageOptions input:focus{outline:none;border-color:var(--brand-purple)}
+
+/* Auth banner */
+.jupAuthBanner{display:flex;align-items:center;gap:8px;margin:0 20px 12px;padding:10px 14px;border:1px solid color-mix(in srgb,var(--brand-purple) 40%,var(--border));border-radius:12px;background:color-mix(in srgb,var(--brand-purple) 6%,var(--surface));color:var(--brand-purple-text);font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
+.jupAuthBanner:hover{background:color-mix(in srgb,var(--brand-purple) 12%,var(--surface))}
+.jupAuthBanner span:first-of-type{flex:1}
+
+/* Swap container */
+.jupSwapContainer{position:relative;padding:0 20px}
+.jupSwapInputCard,.jupSwapOutputCard{border:1px solid var(--border);border-radius:16px;background:var(--surface);padding:14px 16px;transition:border-color .15s}
+.jupSwapInputCard:focus-within,.jupSwapOutputCard:focus-within{border-color:color-mix(in srgb,var(--brand-purple) 50%,var(--border))}
+.jupSwapOutputCard{margin-top:4px}
+.jupSwapInputLabel{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.jupSwapInputLabel>span:first-child{color:var(--text-secondary);font-size:13px;font-weight:500}
+.jupSwapBalance{color:var(--text-metadata);font-size:11px;cursor:pointer;transition:color .15s}
+.jupSwapBalance:hover{color:var(--brand-purple-text)}
+.jupSwapInputRow{display:flex;align-items:center;gap:10px}
+.jupSwapInputRow input{flex:1;background:transparent;border:none;color:var(--text-primary);font-size:24px;font-weight:700;min-width:0;outline:none;-moz-appearance:textfield}
+.jupSwapInputRow input::-webkit-outer-spin-button,.jupSwapInputRow input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.jupSwapInputRow input:read-only{color:var(--text-secondary)}
+.jupSwapInputRow input::placeholder{color:var(--text-muted)}
+.jupSwapTokenTag{display:flex;align-items:center;gap:6px;height:36px;padding:0 12px;border-radius:20px;background:var(--surface-raised);border:1px solid var(--border);font-size:14px;font-weight:700;color:var(--text-primary);white-space:nowrap;flex-shrink:0}
+.jupTokenIcon{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--brand-purple);color:var(--text-inverse);font-size:9px;font-weight:800}
+
+/* Flip button */
+.jupFlipBtn{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;display:grid;place-items:center;width:36px;height:36px;border:3px solid var(--surface-elevated);border-radius:12px;background:var(--surface);color:var(--text-secondary);cursor:pointer;transition:all .15s;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.jupFlipBtn:hover{background:var(--hover-surface);color:var(--brand-purple-text);border-color:var(--brand-purple)}
+
+/* Route info */
+.jupRouteInfo{margin:12px 20px 0;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.jupRouteRow{display:flex;justify-content:space-between;align-items:center;padding:3px 0}
+.jupRouteRow>span:first-child{color:var(--text-metadata);font-size:11px}
+.jupRouteRow>span:last-child{color:var(--text-primary);font-size:11px;font-weight:600}
+.jupHighImpact{color:var(--negative)!important}
+
+/* Banners */
+.jupErrorBanner,.jupWarningBanner,.jupSuccessBanner{display:flex;align-items:center;gap:8px;margin:12px 20px 0;padding:10px 14px;border-radius:12px;font-size:12px;font-weight:500;line-height:1.4}
+.jupErrorBanner{background:color-mix(in srgb,var(--negative) 8%,var(--surface));color:var(--negative);border:1px solid color-mix(in srgb,var(--negative) 20%,var(--border))}
+.jupWarningBanner{background:color-mix(in srgb,var(--warning) 8%,var(--surface));color:var(--warning);border:1px solid color-mix(in srgb,var(--warning) 20%,var(--border))}
+.jupSuccessBanner{background:color-mix(in srgb,var(--positive) 8%,var(--surface));color:var(--positive);border:1px solid color-mix(in srgb,var(--positive) 20%,var(--border))}
+.jupSuccessBanner a{display:inline-flex;align-items:center;gap:4px;margin-left:4px;color:inherit;font-weight:600;text-decoration:underline}
+
+/* Footer */
+.jupModalFooter{padding:16px 20px}
+.jupSwapBtn,.jupDoneBtn,.jupNewSwapBtn{width:100%;height:48px;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;transition:all .15s}
+.jupSwapBtn{background:var(--brand-purple);color:var(--text-inverse);display:flex;align-items:center;justify-content:center;gap:8px}
+.jupSwapBtn:hover:not(:disabled){filter:brightness(1.1);transform:translateY(-1px)}
+.jupSwapBtn:active:not(:disabled){transform:translateY(0)}
+.jupSwapBtn:disabled{opacity:.5;cursor:not-allowed}.jupSwapBtnDisabled{background:var(--surface-subtle)!important;color:var(--text-secondary)!important;border:1px solid var(--border)!important}
+.jupSwapBtnWarn{background:var(--warning);color:#000}
+.jupDoneBtn{background:var(--positive);color:#fff;margin-top:8px}
+.jupDoneBtn:hover{filter:brightness(1.1)}
+.jupNewSwapBtn{background:transparent;border:1px solid var(--border);color:var(--text-secondary);margin-top:8px}
+.jupNewSwapBtn:hover{background:var(--hover-surface);border-color:var(--brand-purple)}
+
+/* Success state */
+.jupSuccessBanner+ .jupModalFooter{padding-top:0}
+
+/* Mobile */
+@media(max-width:600px){
+  .jupModalBackdrop{align-items:end;padding:0}
+  .jupModal{width:100%;max-height:calc(100dvh - env(safe-area-inset-top) - 16px);border-radius:24px 24px 0 0;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  .jupSwapInputRow input{font-size:20px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .jupSettingsBtn,.jupCloseBtn,.jupFlipBtn,.jupSwapBtn,.jupDoneBtn,.jupNewSwapBtn,.jupAuthBanner{transition:none}
+  .spin{animation:none}
+}

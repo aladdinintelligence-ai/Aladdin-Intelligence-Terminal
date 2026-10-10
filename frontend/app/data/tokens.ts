@@ -1,0 +1,8 @@
+import {Token} from "@/app/types";
+export const tokens:Token[]=[
+{id:"bark",mint:"7hd8BARKwF9pQ2kL5xN8sV3cM1aD6eR4tY7uPUMP",symbol:"BARK",name:"Bark Protocol",age:"4m",mc:82400,liquidity:21900,volume:148000,buys:384,sells:119,buyers:271,migration:100,holders:249,creator:2.1,top10:22.8,profitable:11,retention:76,formation:"POST-MIGRATION EXPANSION",change:48.2,color:"#9b7cff"},
+{id:"milo",mint:"9mLoMILOaT7vQ4sK2xP8dF6hJ3nR5wE1cB9zPUMP",symbol:"MILO",name:"Milo on Sol",age:"12m",mc:46700,liquidity:11400,volume:73600,buys:217,sells:84,buyers:164,migration:83,holders:151,creator:4.8,top10:31.4,profitable:8,retention:69,formation:"MIGRATION POSITIONING",change:31.4,color:"#33d6a6"},
+{id:"catx",mint:"4cAtCATXnP8xR2mV7kL5sQ1dF9hW3eB6yT4uPUMP",symbol:"CATX",name:"Cat Experiment",age:"28m",mc:126000,liquidity:34200,volume:210000,buys:516,sells:244,buyers:388,migration:100,holders:346,creator:.8,top10:19.6,profitable:14,retention:83,formation:"BROAD ACCUMULATION",change:18.7,color:"#47a8ff"},
+{id:"frog",mint:"2frgFROGqL7mX9vC4nK1sP8dR5wE3bT6yH2aPUMP",symbol:"FROG",name:"Feels Frog",age:"38s",mc:4800,liquidity:2400,volume:8700,buys:31,sells:8,buyers:23,migration:12,holders:25,creator:6.4,top10:42.1,profitable:1,retention:88,formation:"DISCOVERY",change:8.2,color:"#f6b94a"},
+{id:"ponk",mint:"8pnkPONKmR3xV6cL1qS9dF4hJ7wE2bT5yN8uPUMP",symbol:"PONK",name:"Ponk Culture",age:"2m",mc:19300,liquidity:6100,volume:28400,buys:102,sells:36,buyers:79,migration:46,holders:72,creator:3.9,top10:34.7,profitable:5,retention:72,formation:"EARLY ACCUMULATION",change:22.1,color:"#ff7b54"}
+];export const tokenById=(id:string)=>tokens.find(t=>t.id===id)??tokens[0];

@@ -1,0 +1,1 @@
+import {redirect} from "next/navigation";export default async function WalletCompatibility({params}:{params:Promise<{id:string}>}){const {id}=await params;redirect(`/ask-aladdin?context=wallet:${id}&label=${encodeURIComponent(id)}`)}

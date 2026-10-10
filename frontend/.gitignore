@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.next/
+
+# Local environment files (keep the safe template)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Generated output and local diagnostics
+*.log
+*.tsbuildinfo
+ipconfig.txt
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+.devnet-market-authority.json
+.vercel

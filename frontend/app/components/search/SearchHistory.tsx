@@ -1,0 +1,2 @@
+export type SearchHistoryItem={type:"token"|"wallet"|"transaction";key:string;label:string};
+export function SearchHistory({items,onSelect}:{items:SearchHistoryItem[];onSelect:(key:string)=>void}){if(!items.length)return <div className="emptySearch"><b>Resolve an entity instantly</b><span>Try BARK, a known mint, wallet address, or transaction signature.</span></div>;return <div className="searchHistory"><small>RECENT</small>{items.map(item=><button key={item.key} onClick={()=>onSelect(item.key)}><b>{item.label}</b><span>· {item.type}</span></button>)}</div>}
