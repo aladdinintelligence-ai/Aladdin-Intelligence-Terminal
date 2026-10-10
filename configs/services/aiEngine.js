@@ -42,14 +42,17 @@ const corsWhitelist = (env.CORS_WHITELIST || '')
   .filter(Boolean);
 
 const aiEngine = {
+  // OpenAI-compatible LLM provider. Defaults to OpenCode Go (oc_sk_... key),
+  // but also accepts OpenRouter (sk-or-... key) via the OPENROUTER_* env vars.
   openRouter: {
-    apiKey: env.OPENROUTER_API_KEY || '',
-    baseUrl: env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+    apiKey: env.OPENCODE_API_KEY || env.OPENROUTER_API_KEY || '',
+    baseUrl: env.OPENCODE_BASE_URL || env.OPENROUTER_BASE_URL || 'https://opencode.ai/zen/go/v1',
     models: {
-      quick: env.OPENROUTER_MODEL_QUICK || 'openai/gpt-4o-mini',
-      deep: env.OPENROUTER_MODEL_DEEP || 'anthropic/claude-sonnet-4-5',
-      default: env.OPENROUTER_MODEL_DEFAULT || 'openai/gpt-4o-mini',
+      quick: env.OPENCODE_MODEL_QUICK || env.OPENROUTER_MODEL_QUICK || 'glm-5.3-flash',
+      deep: env.OPENCODE_MODEL_DEEP || env.OPENROUTER_MODEL_DEEP || 'glm-5.3',
+      default: env.OPENCODE_MODEL_DEFAULT || env.OPENROUTER_MODEL_DEFAULT || 'glm-5.3-flash',
     },
+    sessionId: env.OPENCODE_SESSION || '',
     temperature: env.AI_TEMPERATURE != null ? parseFloat(env.AI_TEMPERATURE) : 0.2,
     maxTokensDefault: intValue(env.AI_MAX_TOKENS_DEFAULT, 1024),
     timeoutMs: intValue(env.AI_TIMEOUT_MS, 45000),
