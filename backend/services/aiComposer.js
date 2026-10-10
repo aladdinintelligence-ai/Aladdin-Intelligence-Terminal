@@ -1,18 +1,25 @@
 import axios from 'axios';
+import { randomUUID } from 'crypto';
+
 import { aiEngine } from '../configs/services/aiEngine.js';
 
 let _baseUrl = '';
 let _apiKey = '';
 let _timeout = 45000;
 let _userAgent = '';
+let _isOpenCode = false;
+let _isOpenRouter = false;
+let _sessionId = '';
 
-const OPENROUTER_KEY_PREFIX = 'sk-or-';
+const KNOWN_KEY_PREFIXES = ['oc_sk_', 'sk-or-'];
 
 function keyProblem(key) {
   const value = String(key || '').trim();
-  if (!value) return 'OPENROUTER_API_KEY is not set. Add a valid key to .env (starts with "sk-or-").';
-  if (!value.startsWith(OPENROUTER_KEY_PREFIX)) {
-    return `OPENROUTER_API_KEY has an invalid format (does not start with "${OPENROUTER_KEY_PREFIX}"). This is not an OpenRouter key - use the "sk-or-v1-..." key from https://openrouter.ai/keys.`;
+  if (!value) {
+    return 'No LLM API key is set. Add OPENCODE_API_KEY ("oc_sk_...") or OPENROUTER_API_KEY ("sk-or-...") to .env.';
+  }
+  if (!KNOWN_KEY_PREFIXES.some(prefix => value.startsWith(prefix))) {
+    return 'The configured LLM key has an unexpected format. Expected an OpenCode Go key ("oc_sk_...") or an OpenRouter key ("sk-or-...").';
   }
   return null;
 }
@@ -22,6 +29,9 @@ export function initAiComposer(config = {}) {
   _apiKey = (config.apiKey || aiEngine.openRouter.apiKey || '').trim();
   _timeout = config.timeoutMs || aiEngine.openRouter.timeoutMs;
   _userAgent = config.userAgent || aiEngine.engine.userAgent;
+  _isOpenCode = /opencode\.ai/i.test(_baseUrl);
+  _isOpenRouter = /openrouter\.ai/i.test(_baseUrl);
+  _sessionId = config.sessionId || aiEngine.openRouter.sessionId || randomUUID();
 
   const problem = keyProblem(_apiKey);
   if (problem) {
@@ -34,11 +44,15 @@ export function initAiComposer(config = {}) {
 function headers() {
   const result = {
     'Content-Type': 'application/json',
-    'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:5000',
-    'X-Title': 'aladdin-node-server',
   };
   if (_apiKey) result.Authorization = `Bearer ${_apiKey}`;
   if (_userAgent) result['User-Agent'] = _userAgent;
+  // OpenCode routes and caches on a stable session id.
+  if (_isOpenCode && _sessionId) result['x-opencode-session'] = _sessionId;
+  if (_isOpenRouter) {
+    result['HTTP-Referer'] = process.env.OPENROUTER_SITE_URL || 'http://localhost:5000';
+    result['X-Title'] = 'aladdin-node-server';
+  }
   return result;
 }
 
@@ -50,8 +64,8 @@ function resolveModel(tier = 'default') {
 }
 
 /**
- * Streamless chat completion through OpenRouter.
- * Returns { ok, content, error, model, raw }.
+ * Streamless chat completion through an OpenAI-compatible provider
+ * (OpenCode Go or OpenRouter). Returns { ok, content, error, model, raw }.
  */
 export async function chat(messages, options = {}) {
   const problem = keyProblem(_apiKey);
@@ -95,7 +109,7 @@ export async function chat(messages, options = {}) {
     const detail = exc.response?.data?.error?.message || exc.response?.data?.message || '';
     const msg = exc.message + (detail ? `: ${detail}` : '');
     if (exc.response?.status === 401) {
-      console.error(`[aiComposer] 401 from OpenRouter. The key was rejected - verify OPENROUTER_API_KEY in .env is a current "sk-or-v1-..." key.`);
+      console.error(`[aiComposer] 401 from ${_baseUrl}. The key was rejected - verify OPENCODE_API_KEY/OPENROUTER_API_KEY in .env is current.`);
     } else {
       console.error(`[aiComposer] Request failed (${model}): ${msg}`);
     }
