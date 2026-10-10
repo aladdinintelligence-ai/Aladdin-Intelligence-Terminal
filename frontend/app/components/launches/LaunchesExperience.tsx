@@ -8,7 +8,7 @@ import {LaunchFilters} from "@/app/components/launches/LaunchFilters";
 import {LaunchTokenCard} from "@/app/components/launches/LaunchTokenCard";
 import {LaunchFeedRow} from "@/app/components/launches/LaunchFeedRow";
 import {useAuth} from "@/app/hooks/useAuth";
-import {useLaunches} from "@/app/hooks/useLaunches";
+import {useLaunches,useLaunchStats} from "@/app/hooks/useLaunches";
 import {useAladdinWallet} from "@/app/hooks/useAladdinWallet";
 import {JupiterSwapModal} from "@/app/components/jupiter-swap/JupiterSwapModal";
 import {EntryModal} from "@/app/components/landing/EntryModal";
@@ -34,6 +34,7 @@ export function LaunchesExperience(){
   const [hydrated,setHydrated]=useState(false);
 
   const {tokens:liveTokens,loading,refreshing,error,refetch}=useLaunches(tab);
+  const stats=useLaunchStats();
 
   useEffect(()=>{try{const stored=JSON.parse(sessionStorage.getItem(STORAGE_KEY)??"null") as Partial<StoredLaunchView>|null;if(stored?.tab&&tabs.includes(stored.tab))setTab(stored.tab);if(stored?.filters)setFilters({...defaultLaunchFilters,...stored.filters});if(stored?.sort)setSort(stored.sort);requestAnimationFrame(()=>window.scrollTo({top:stored?.scrollY??0}));}catch{}setHydrated(true)},[]);
 
@@ -66,9 +67,9 @@ export function LaunchesExperience(){
         <p>Find activity, then investigate the behaviour underneath it.</p>
       </div>
       <div className="titleStats">
-        <span><b>{liveTokens.length}</b> tracked</span>
-        <span><b>{liveTokens.filter(x=>x.lifecycle==="almost-bonded").length}</b> almost bonded</span>
-        <span><b>{liveTokens.filter(x=>x.lifecycle==="migrated").length}</b> migrated</span>
+        <span><b>{stats.tracked}</b> tracked</span>
+        <span><b>{stats.almostBonded}</b> almost bonded</span>
+        <span><b>{stats.migrated}</b> migrated</span>
       </div>
     </div>
 

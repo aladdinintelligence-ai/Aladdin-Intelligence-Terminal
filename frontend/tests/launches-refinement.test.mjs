@@ -14,7 +14,7 @@ const artwork=read("app/components/launches/SyntheticTokenImage.tsx");
 const hook=read("app/hooks/useLaunches.ts");
 
 test("fixture coverage includes at least six tokens per lifecycle",()=>{assert.ok((fixtures.match(/lifecycle:"new"/g)??[]).length>=6);assert.ok((fixtures.match(/lifecycle:"almost-bonded"/g)??[]).length>=6);assert.ok((fixtures.match(/lifecycle:"migrated"/g)??[]).length>=6)});
-test("volume windows and comparative direction are lifecycle aware",()=>{assert.match(utilities,/ageMinutes<60/);assert.match(utilities,/previousHourVolume===null/);assert.match(card,/volumeWindow\(token\)/);assert.match(card,/volumeUp/);assert.match(card,/volumeDown/)});
+test("volume change direction is lifecycle aware and no misleading window label is rendered",()=>{assert.match(utilities,/ageMinutes<60/);assert.match(utilities,/previousHourVolume===null/);assert.doesNotMatch(utilities,/volumeWindow/);assert.doesNotMatch(card,/volumeWindow/);assert.doesNotMatch(feed,/volumeWindow/);assert.match(card,/volumeUp/);assert.match(card,/volumeDown/)});
 test("migrated cards replace bonding with holders and transactions",()=>{assert.match(card,/token\.lifecycle!=="migrated"/);assert.match(card,/Holders/);assert.match(card,/TX/);assert.doesNotMatch(card,/Bonding 100/)});
 test("cards expose only Ask Aladdin and compact Buy actions",()=>{assert.match(card,/Ask Aladdin/);assert.match(card,/>Buy</);assert.doesNotMatch(card,/>Sell</);assert.doesNotMatch(card,/Star|Comment|Inspect wallets/)});
 test("screener supports the acceptance preset and all four groups",()=>{for(const value of [/marketCapMin:20000/,/marketCapMax:80000/,/volumeMin:20000/,/bondingMin:70/,/migrationSpecialistsMin:3/,/sniperShareMax:10/])assert.match(utilities,value);for(const group of ["Market","Lifecycle","Behaviour","Token-specific wallet context"])assert.match(filters,new RegExp(`title="${group}"`))});
@@ -56,3 +56,14 @@ test("synthetic token artwork is deterministic and not a letter-only circle",()=
 test("mobile feed motion is restrained and respects reduced motion",()=>{assert.match(styles,/launchFeedEnter/);assert.match(styles,/translateY\(6px\)/);assert.match(styles,/prefers-reduced-motion:reduce/);assert.match(styles,/transition:none/)});
 test("fixture artwork maps every token to a bundled deterministic motif",()=>{for(const id of ["mochi","orbit","pixel","sprout","neon","crumb","squid","dust","bullz","milo-launch","quack","zen","toast","wisp","capy","jolt","nova","bark-launch","glow","rune","mew","beam","tide","void"])assert.ok(artwork.includes(id));assert.match(artwork,/TokenMotif/);assert.doesNotMatch(artwork,/https?:\/\//)});
 test("fidelity states remain Launches scoped and geometry stays frozen",()=>{assert.match(styles,/launchLiveValue\.is-updated-positive/);assert.match(styles,/launchLiveValue\.is-updated-negative/);assert.match(styles,/tokenImage-almost-bonded/);assert.match(styles,/launchFeedRow:hover/);assert.match(styles,/launchFeedBehaviour>button:active/);assert.match(styles,/launchFeedLifecycle>a:active/);assert.doesNotMatch(styles,/(^|\})\s*(button|body|h1|h2|h3|p)\s*\{/m)});
+test("launch header counts every lifecycle from the shared cache, not just the active tab",()=>{
+  assert.match(hook,/export function useLaunchStats/);
+  assert.match(hook,/cacheSnapshot\.get\('new'\)/);
+  assert.match(hook,/cacheSnapshot\.get\('almost-bonded'\)/);
+  assert.match(hook,/cacheSnapshot\.get\('migrated'\)/);
+  assert.match(experience,/useLaunchStats/);
+  assert.match(experience,/\{stats\.tracked\}/);
+  assert.match(experience,/\{stats\.almostBonded\}/);
+  assert.match(experience,/\{stats\.migrated\}/);
+  assert.doesNotMatch(experience,/liveTokens\.filter\(x=>x\.lifecycle/);
+});

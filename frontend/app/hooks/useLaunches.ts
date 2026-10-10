@@ -175,10 +175,12 @@ export function useLaunches(tab: string): UseLaunchesResult {
 
   useEffect(() => {
     const id = setInterval(() => {
-      if (isStale(cache.get(key))) void fetchTab(key);
+      for (const t of LAUNCH_TABS) {
+        if (isStale(cache.get(t))) void fetchTab(t);
+      }
     }, 30_000);
     return () => clearInterval(id);
-  }, [key]);
+  }, []);
 
   return {
     tokens: state.tokens,
@@ -189,4 +191,21 @@ export function useLaunches(tab: string): UseLaunchesResult {
       void fetchTab(key);
     }, [key]),
   };
+}
+
+export interface LaunchStats {
+  tracked: number;
+  almostBonded: number;
+  migrated: number;
+}
+
+// Counts are derived from the shared cache of every tab, so the header boxes
+// reflect all lifecycles on load (and whenever any tab's data changes) instead
+// of only the currently selected tab.
+export function useLaunchStats(): LaunchStats {
+  const cacheSnapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const almostBonded = cacheSnapshot.get('almost-bonded')?.tokens.length ?? 0;
+  const migrated = cacheSnapshot.get('migrated')?.tokens.length ?? 0;
+  const tracked = (cacheSnapshot.get('new')?.tokens.length ?? 0) + almostBonded + migrated;
+  return { tracked, almostBonded, migrated };
 }
