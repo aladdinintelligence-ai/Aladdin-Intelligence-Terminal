@@ -187,9 +187,10 @@ The frontend is more than a set of pages; it owns several client capabilities:
   `useClusters.ts`, `useHistorical.ts`, `useOg.ts`, `useAlerts.ts`,
   `useWatchlist.ts`) with per-tab caching and interval refresh.
 - **Workspace & persistence** — saved queries, dashboards and exports index
-  surfaces, with local stores for anonymous use and backend persistence once
-  signed in (`app/services/workspace-local.ts`, `app/services/profile`,
-  `app/services/analysis-run-store.ts`).
+  surfaces. Ask Aladdin investigations are ephemeral for anonymous visitors and
+  follow signed-in accounts across devices via the backend session API
+  (`app/services/workspace-local.ts`, `app/services/workspace-remote.ts`,
+  `app/services/workspace-storage.ts`, `app/services/analysis-run-store.ts`).
 - **Ask Aladdin workspace** — investigations, conversation sessions, attached
   context, structured results and CSV/JSON export
   (`app/components/ask-aladdin`, `app/features/ask-aladdin`).
