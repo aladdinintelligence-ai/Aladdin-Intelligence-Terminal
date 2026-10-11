@@ -286,7 +286,7 @@ browser test runner.
 
 ---
 
-## Troubleshooting
+## Troubleshooting.
 
 - **All boards empty / "Failed to fetch".** The backend is not running or
   `NEXT_PUBLIC_API_URL` is wrong. Confirm the backend `/` returns
