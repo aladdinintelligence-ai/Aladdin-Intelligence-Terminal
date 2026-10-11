@@ -29,19 +29,23 @@ export async function askAladdinController(req, res) {
 
   const { question, mode, period, hasPriorContext, currentEntityId, depth } = req.body;
   const sessionId = typeof req.body.sessionId === 'string' && req.body.sessionId ? req.body.sessionId : `session-${Date.now()}`;
-  const userId = req.user.userId;
+  const userId = req.user?.userId || null;
   const timezone = req.profile?.timezone || 'Europe/London';
   const walletAddress = req.profile?.walletAddress || null;
   const analysisPeriod = period || resolveAnalysisPeriod(question, new Date(), timezone);
 
-  const runDoc = await AskAnalysisRun.create({
-    sessionId,
-    userId,
-    status: 'running',
-    depth: depth || 'quick',
-    startedAt: new Date(),
-    events: [],
-  });
+  // Anonymous callers get the same analysis but nothing is persisted for them
+  // (no run document, and their session/turn history is never written back).
+  const runDoc = userId
+    ? await AskAnalysisRun.create({
+        sessionId,
+        userId,
+        status: 'running',
+        depth: depth || 'quick',
+        startedAt: new Date(),
+        events: [],
+      })
+    : null;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -51,18 +55,26 @@ export async function askAladdinController(req, res) {
 
   const onActivity = (events) => {
     writeFrame(res, { type: 'activity', events });
-    AskAnalysisRun.updateOne({ _id: runDoc._id }, { $set: { events } }).catch(() => {});
+    if (runDoc) AskAnalysisRun.updateOne({ _id: runDoc._id }, { $set: { events } }).catch(() => {});
   };
 
   let closed = false;
   const onClose = () => {
+    // Track the RESPONSE, not the request: on a POST the request stream closes
+    // as soon as express.json() consumes the body, which would falsely mark the
+    // stream closed before the analysis runs and suppress the final frame.
+    // `res` 'close' fires on real client disconnects and after a normal end();
+    // ignore the latter so a completed run still flushes its result.
+    if (res.writableEnded) return;
     closed = true;
-    AskAnalysisRun.updateOne(
-      { _id: runDoc._id, status: 'running' },
-      { $set: { status: 'idle', events: [] } }
-    ).catch(() => {});
+    if (runDoc) {
+      AskAnalysisRun.updateOne(
+        { _id: runDoc._id, status: 'running' },
+        { $set: { status: 'idle', events: [] } }
+      ).catch(() => {});
+    }
   };
-  req.on('close', onClose);
+  res.on('close', onClose);
 
   try {
     const result = await runAskAladdin(
@@ -82,20 +94,24 @@ export async function askAladdinController(req, res) {
       writeFrame(res, { type: 'complete', result });
       res.end();
     }
-    await AskAnalysisRun.updateOne(
-      { _id: runDoc._id },
-      { $set: { status: 'complete', completedAt: new Date(), events: result.activityEvents, result } }
-    ).catch(() => {});
+    if (runDoc) {
+      await AskAnalysisRun.updateOne(
+        { _id: runDoc._id },
+        { $set: { status: 'complete', completedAt: new Date(), events: result.activityEvents, result } }
+      ).catch(() => {});
+    }
   } catch (exc) {
     console.error('[ask] analysis failed:', exc.message);
     if (!closed) {
       writeFrame(res, { type: 'error', error: exc.message || 'Analysis failed' });
       res.end();
     }
-    await AskAnalysisRun.updateOne(
-      { _id: runDoc._id },
-      { $set: { status: 'error', errorMessage: exc.message, completedAt: new Date() } }
-    ).catch(() => {});
+    if (runDoc) {
+      await AskAnalysisRun.updateOne(
+        { _id: runDoc._id },
+        { $set: { status: 'error', errorMessage: exc.message, completedAt: new Date() } }
+      ).catch(() => {});
+    }
   }
 }
 
