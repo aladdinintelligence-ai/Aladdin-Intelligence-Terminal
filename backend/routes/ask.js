@@ -10,7 +10,7 @@ import {
   patchProfileController,
   getAnalysisRunController,
 } from '../controllers/ask/askAladdinController.js';
-import { requireAuth } from '../middleware/auth.js';
+import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import { applyProfile } from '../middleware/personalization.js';
 import { createRateLimiter } from '../middleware/rateLimiter.js';
 
@@ -18,7 +18,10 @@ const askRouter = Router();
 
 const askLimiter = createRateLimiter({ windowMs: 60_000, max: 20, keyPrefix: 'ask' });
 
-askRouter.post('/api/ask', requireAuth, applyProfile, askLimiter, askAladdinController);
+// optionalAuth (not requireAuth): Ask Aladdin is usable without an account.
+// Signed-in callers get req.user/req.profile; anonymous callers are rate-limited
+// per IP and their runs are never persisted.
+askRouter.post('/api/ask', optionalAuth, applyProfile, askLimiter, askAladdinController);
 
 askRouter.get('/api/ask/sessions', requireAuth, applyProfile, listSessionsController);
 askRouter.post('/api/ask/sessions', requireAuth, applyProfile, saveSessionController);
